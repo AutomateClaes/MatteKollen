@@ -859,8 +859,9 @@ export const generateTask = (taskId) => {
         options = generateOptions(correctAnswer, 10, 40, 4);
     }
     else if (taskId === 'koordinatsystem') {
-        const typ = randomInt(0, 1) === 0 ? "x-axeln (vågräta)" : "y-axeln (lodräta)";
-        correctAnswer = typ.includes("x") ? "Hur långt åt höger" : "Hur långt upp";
+        const isXAxis = randomInt(0, 1) === 0;
+        const typ = isXAxis ? "x-axeln (vågräta)" : "y-axeln (lodräta)";
+        correctAnswer = isXAxis ? "Hur långt åt höger" : "Hur långt upp";
         tags = ['Koordinatsystem'];
         equation = `Punkt (x, y)`;
         text = `Vad anges på ${typ}?`;
