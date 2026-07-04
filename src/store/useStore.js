@@ -13,6 +13,7 @@ export const useStore = create(
 
             seenTasks: [],
             masteryThreshold: 5,
+            points: 0,
 
             // Actions
             toggleTask: (taskId) => set((state) => {
@@ -88,7 +89,7 @@ export const useStore = create(
                 return { history: [newEntry, ...state.history] };
             }),
 
-            addPoints: (amount) => set((state) => ({ points: state.points + amount })),
+            addPoints: (amount) => set((state) => ({ points: (Number.isFinite(state.points) ? state.points : 0) + amount })),
 
             setMasteryThreshold: (val) => set(() => ({ masteryThreshold: val })),
 

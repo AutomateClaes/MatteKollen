@@ -179,7 +179,7 @@ export default function GameView({ onBack }) {
                         ))}
                     </div>
                     <div className="points-badge" style={{ fontWeight: 'bold', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        ⭐ {points} p
+                        ⭐ {Number.isFinite(points) ? points : 0} p
                     </div>
                 </header>
 
@@ -336,7 +336,8 @@ export default function GameView({ onBack }) {
                                         <motion.div
                                             className={`feedback-msg ${isCorrect ? 'positive' : 'negative'}`}
                                             initial={{ scale: 0, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1, type: "spring" }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            transition={{ type: "spring" }}
                                         >
                                             {isCorrect ? (
                                                 <>
