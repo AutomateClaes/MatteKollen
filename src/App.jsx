@@ -24,7 +24,8 @@ class ErrorBoundary extends React.Component {
 }
 
 function App() {
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Starta direkt i spelet — inställningarna nås via tillbaka-pilen
+  const [isPlaying, setIsPlaying] = useState(true);
 
   return (
     <div className="app-container">

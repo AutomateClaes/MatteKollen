@@ -20,6 +20,7 @@ class ErrorBoundary extends Component {
     }
 }
 import { useStore } from '../store/useStore';
+import { getGradeTaskIdSequence } from '../data/categories';
 import { generateTask } from '../game/taskGenerator';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, ArrowRight, ArrowLeft } from 'lucide-react';
@@ -67,7 +68,18 @@ export default function GameView({ onBack }) {
         setWrongAnswers([]);
         setAllMastered(false);
 
-        const activeNotMastered = activeTasks.filter(taskId => !getLatestScore(taskId).isMastered);
+        // Progression: uppgifter serveras från lägsta årskursen med
+        // oklarade aktiva uppgifter — nästa årskurs börjar när den är klar
+        let activeNotMastered = [];
+        for (const grade of getGradeTaskIdSequence()) {
+            const unmastered = activeTasks.filter(taskId =>
+                grade.taskIds.includes(taskId) && !getLatestScore(taskId).isMastered
+            );
+            if (unmastered.length > 0) {
+                activeNotMastered = unmastered;
+                break;
+            }
+        }
 
         if (activeNotMastered.length === 0 && activeTasks.length > 0) {
             setAllMastered(true);

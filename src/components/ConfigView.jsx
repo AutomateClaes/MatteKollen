@@ -7,7 +7,7 @@ import './ConfigView.css';
 
 export default function ConfigView({ onStartPlay }) {
     const { activeTasks, toggleTask, toggleSubcategory, toggleCategory, toggleGradeLevel, getLatestScore, masteryThreshold, setMasteryThreshold, resetProgress } = useStore();
-    const [expandedGrades, setExpandedGrades] = useState({ ak1_3: false, ak4_6: false });
+    const [expandedGrades, setExpandedGrades] = useState({});
     const [expandedCategories, setExpandedCategories] = useState({});
 
     const toggleGradeExpand = (gradeId) => {

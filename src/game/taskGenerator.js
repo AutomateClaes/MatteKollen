@@ -5,11 +5,25 @@ const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1) + min
 
 const generateOptions = (correctAnswer, minOpt, maxOpt, count = 4) => {
     const options = new Set([correctAnswer]);
-    while (options.size < count) {
-        let opt = correctAnswer + randomInt(-4, 4);
+    // Om facit ligger utanför [minOpt, maxOpt] klampas alla kandidater till
+    // samma kantvärde — vidga spannet successivt och sätt ett tak på antalet
+    // försök så att loopen aldrig kan fastna
+    let spread = 4;
+    let guard = 0;
+    while (options.size < count && guard < 300) {
+        guard++;
+        if (guard % 25 === 0) spread *= 2;
+        let opt = correctAnswer + randomInt(-spread, spread);
         if (opt < minOpt) opt = minOpt;
         if (opt > maxOpt) opt = maxOpt;
         options.add(opt);
+    }
+    // Sista utväg: fyll deterministiskt runt facit
+    let step = 1;
+    while (options.size < count) {
+        options.add(correctAnswer + step);
+        if (options.size < count) options.add(correctAnswer - step);
+        step++;
     }
     return Array.from(options).sort(() => Math.random() - 0.5);
 };
@@ -897,7 +911,7 @@ export const generateTask = (taskId) => {
         if (spellingTask && spellingTask.words.length > 0) {
             const wordEntry = spellingTask.words[randomInt(0, spellingTask.words.length - 1)];
             correctAnswer = wordEntry.word;
-            tags = ['Stavning', spellingTask.name];
+            tags = ['Stavning', spellingTask.gradeLabel];
             equation = '';
             text = 'Hur stavas ordet?';
             options = [];

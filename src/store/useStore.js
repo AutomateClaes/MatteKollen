@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { GRADE_LEVELS, getAllCategories } from '../data/categories';
+import { GRADE_LEVELS, getAllCategories, getAllTaskIds } from '../data/categories';
 
 export const useStore = create(
     persist(
         (set, get) => ({
-            // Array of active task IDs
-            activeTasks: ['addition_0_10'],
+            // Array of active task IDs — everything checked by default
+            activeTasks: getAllTaskIds(),
 
             // Log array. Each item: { id, taskId, isCorrect, timestamp, startTime, endTime, timeToAnswer, taskData }
             history: [],
@@ -96,7 +96,7 @@ export const useStore = create(
             resetProgress: () => set(() => ({
                 history: [],
                 points: 0,
-                activeTasks: ['addition_0_10', 'subtraktion_0_10', 'talraden_0_10'],
+                activeTasks: getAllTaskIds(),
                 seenTasks: [],
                 masteryThreshold: 5,
             })),
@@ -141,6 +141,18 @@ export const useStore = create(
         }),
         {
             name: 'math-school-app-storage',
+            version: 2,
+            migrate: (persistedState, version) => {
+                if (version < 2) {
+                    // Kategoristrukturen gjordes om till Åk 1-6 med nya
+                    // stavningsuppgifter — gamla val pekar på borttagna IDs
+                    return {
+                        ...persistedState,
+                        activeTasks: getAllTaskIds(),
+                    };
+                }
+                return persistedState;
+            },
         }
     )
 );
