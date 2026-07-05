@@ -913,7 +913,10 @@ export const generateTask = (taskId) => {
             correctAnswer = wordEntry.word;
             tags = ['Stavning', spellingTask.gradeLabel];
             equation = '';
-            text = 'Hur stavas ordet?';
+            // Meningen sätter ordet i ett sammanhang, med ordet som lucka
+            text = wordEntry.sentence
+                ? wordEntry.sentence.replace(wordEntry.word, '__')
+                : 'Hur stavas ordet?';
             options = [];
             return {
                 id,

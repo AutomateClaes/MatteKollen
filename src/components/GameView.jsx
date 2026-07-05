@@ -38,6 +38,7 @@ export default function GameView({ onBack }) {
     const [allMastered, setAllMastered] = useState(false);
     const [spellingInput, setSpellingInput] = useState('');
     const [spellingShake, setSpellingShake] = useState(false);
+    const [revealedAnswer, setRevealedAnswer] = useState(false);
 
     const speakWord = (word) => {
         if (!window.speechSynthesis) return;
@@ -67,6 +68,7 @@ export default function GameView({ onBack }) {
         setAttempts(0);
         setWrongAnswers([]);
         setAllMastered(false);
+        setRevealedAnswer(false);
 
         // Progression: uppgifter serveras från lägsta årskursen med
         // oklarade aktiva uppgifter — nästa årskurs börjar när den är klar
@@ -128,6 +130,18 @@ export default function GameView({ onBack }) {
             setSpellingShake(true);
             setTimeout(() => setSpellingShake(false), 500);
         }
+    };
+
+    const handleRevealAnswer = () => {
+        if (revealedAnswer || (isAnswered && isCorrect)) return;
+        setRevealedAnswer(true);
+        // Loggas som fel med markering att svaret visades (ordet följer
+        // med i taskData) — och räknas som ett försök så inga poäng ges
+        if (attempts === 0) {
+            logResult(currentTask.taskId, false, { ...currentTask, revealedAnswer: true }, taskStartTime, Date.now());
+        }
+        setAttempts(a => a + 1);
+        speakWord(currentTask.correctAnswer);
     };
 
     const handleAnswer = (answer) => {
@@ -246,6 +260,24 @@ export default function GameView({ onBack }) {
                                         >
                                             Kontrollera ✓
                                         </motion.button>
+                                    )}
+
+                                    {/* Visa svar */}
+                                    {!(isAnswered && isCorrect) && (
+                                        revealedAnswer ? (
+                                            <motion.div
+                                                className="revealed-answer"
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                            >
+                                                Rätt svar: <strong>{currentTask.correctAnswer}</strong>
+                                                <span className="revealed-hint">Skriv ordet för att gå vidare</span>
+                                            </motion.div>
+                                        ) : (
+                                            <button className="btn-reveal" onClick={handleRevealAnswer}>
+                                                👁 Visa svar
+                                            </button>
+                                        )
                                     )}
 
                                     {/* Feedback */}
