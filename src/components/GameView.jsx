@@ -99,7 +99,9 @@ export default function GameView({ onBack }) {
         const correctByTask = {};
         const correctByQuestion = {};
         for (const entry of history) {
-            if (!entry.isCorrect) continue;
+            // Rätt svar räknas — även rätt efter fel försök (solvedAfterRetry),
+            // så att en klarad fråga inte prioriteras igen
+            if (!entry.isCorrect && !entry.taskData?.solvedAfterRetry) continue;
             correctByTask[entry.taskId] = (correctByTask[entry.taskId] || 0) + 1;
             if (entry.questionId) {
                 correctByQuestion[entry.questionId] = (correctByQuestion[entry.questionId] || 0) + 1;
@@ -161,6 +163,10 @@ export default function GameView({ onBack }) {
             if (attempts === 0) {
                 logResult(currentTask.taskId, true, currentTask, taskStartTime, endTime);
                 addPoints(10);
+            } else if (!revealedAnswer) {
+                // Rätt efter fel (utan visat svar): räknas inte mot
+                // Mästarnivån, men frågan lämnar urvalsprioriteringen
+                logResult(currentTask.taskId, false, { ...currentTask, solvedAfterRetry: true }, taskStartTime, endTime);
             }
             setIsAnswered(true);
             setIsCorrect(true);
@@ -199,6 +205,10 @@ export default function GameView({ onBack }) {
             if (attempts === 0) {
                 logResult(currentTask.taskId, true, currentTask, taskStartTime, endTime);
                 addPoints(10);
+            } else {
+                // Rätt efter fel: räknas inte mot Mästarnivån, men frågan
+                // ska inte längre prioriteras i urvalet
+                logResult(currentTask.taskId, false, { ...currentTask, solvedAfterRetry: true }, taskStartTime, endTime);
             }
             setIsAnswered(true);
             setSelectedAnswer(answer);
