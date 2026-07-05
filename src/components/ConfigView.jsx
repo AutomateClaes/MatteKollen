@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { GRADE_LEVELS } from '../data/categories';
-import { Settings, Play, CheckCircle2, Circle, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { Settings, Play, CheckCircle2, Circle, MinusCircle, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './ConfigView.css';
 
@@ -93,7 +93,7 @@ export default function ConfigView({ onStartPlay }) {
                                     {gradeAllActive ? (
                                         <CheckCircle2 color="var(--color-primary)" size={32} fill="var(--color-primary-light)" />
                                     ) : gradeSomeActive ? (
-                                        <Circle color="var(--color-primary)" size={32} fill="rgba(0,0,0,0.05)" style={{ opacity: 0.7 }} />
+                                        <MinusCircle color="white" size={32} fill="var(--color-primary)" />
                                     ) : (
                                         <Circle color="var(--color-text-muted)" size={32} />
                                     )}
@@ -145,7 +145,7 @@ export default function ConfigView({ onStartPlay }) {
                                                             {allActive ? (
                                                                 <CheckCircle2 color={category.color} size={28} fill={`${category.color}30`} />
                                                             ) : someActive ? (
-                                                                <Circle color={category.color} size={28} fill={`${category.color}10`} style={{ opacity: 0.7 }} />
+                                                                <MinusCircle color="white" size={28} fill={category.color} />
                                                             ) : (
                                                                 <Circle color="var(--color-text-muted)" size={28} />
                                                             )}
@@ -187,7 +187,7 @@ export default function ConfigView({ onStartPlay }) {
                                                                                         {subAllActive ? (
                                                                                             <CheckCircle2 color={category.color} size={24} fill={`${category.color}30`} />
                                                                                         ) : subSomeActive ? (
-                                                                                            <Circle color={category.color} size={24} fill={`${category.color}10`} style={{ opacity: 0.7 }} />
+                                                                                            <MinusCircle color="white" size={24} fill={category.color} />
                                                                                         ) : (
                                                                                             <Circle color="var(--color-text-muted)" size={24} />
                                                                                         )}
