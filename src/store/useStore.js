@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { GRADE_LEVELS, getAllCategories, getAllTaskIds } from '../data/categories';
+import { getSpellingTaskIdsForGrade } from '../data/spellingWords';
 
 export const useStore = create(
     persist(
@@ -142,7 +143,7 @@ export const useStore = create(
         }),
         {
             name: 'math-school-app-storage',
-            version: 2,
+            version: 3,
             migrate: (persistedState, version) => {
                 if (version < 2) {
                     // Kategoristrukturen gjordes om till Åk 1-6 med nya
@@ -150,6 +151,17 @@ export const useStore = create(
                     return {
                         ...persistedState,
                         activeTasks: getAllTaskIds(),
+                    };
+                }
+                if (version < 3) {
+                    // 90 nya stavningsord för Åk 4 — kryssa i dem för
+                    // befintliga installationer
+                    return {
+                        ...persistedState,
+                        activeTasks: Array.from(new Set([
+                            ...(persistedState.activeTasks || []),
+                            ...getSpellingTaskIdsForGrade(4),
+                        ])),
                     };
                 }
                 return persistedState;

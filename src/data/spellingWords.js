@@ -65,6 +65,116 @@ export const SPELLING_TASKS = {
         ['vanster', 'vänster', 'Motsatsen till höger.', 'Jag skriver med vänster hand.'],
         ['hungrig', 'hungrig', 'När magen kurrar är man hungrig.', 'Efter träningen är jag alltid hungrig.'],
         ['beratta', 'berätta', 'Att tala om vad som har hänt.', 'Farmor ska berätta en saga.'],
+
+        // j-ljud (hj, dj, lj, gj)
+        ['hjalte', 'hjälte', 'En modig person.', 'Brandmannen blev en hjälte när han räddade katten.'],
+        ['hjalm', 'hjälm', 'Skyddar huvudet när du cyklar.', 'Ta på dig din hjälm innan du cyklar.'],
+        ['hjort', 'hjort', 'Ett skogsdjur med horn.', 'En hjort sprang över vägen.'],
+        ['djur', 'djur', 'Hundar, katter och kor är olika djur.', 'På bondgården finns många djur.'],
+        ['djup', 'djup', 'Motsatsen till grund.', 'Sjön är väldigt djup på mitten.'],
+        ['djarv', 'djärv', 'Modig och vågad.', 'Det var en djärv idé att klättra högst upp.'],
+        ['ljud', 'ljud', 'Något man hör.', 'Ett konstigt ljud hördes från källaren.'],
+        ['ljuga', 'ljuga', 'Att inte tala sanning.', 'Man ska inte ljuga för sina vänner.'],
+        ['ljummen', 'ljummen', 'Varken varm eller kall.', 'Soppan var bara ljummen när vi åt.'],
+        ['gjorde', 'gjorde', 'Dåtid av att göra.', 'Vi gjorde en snögubbe igår.'],
+
+        // sj-ljud (sj, skj, stj)
+        ['sju', 'sju', 'Talet efter sex.', 'Min lillebror fyller sju år idag.'],
+        ['sjunga', 'sjunga', 'Att göra musik med rösten.', 'Vi ska sjunga i kören på fredag.'],
+        ['sjunka', 'sjunka', 'Att åka nedåt i vattnet.', 'Stenen började sjunka mot botten.'],
+        ['sjo', 'sjö', 'Vatten omgivet av land.', 'Vi badar i en sjö på sommaren.'],
+        ['sjalv', 'själv', 'Utan hjälp av någon annan.', 'Jag knöt skorna helt själv.'],
+        ['sjal', 'sjal', 'Ett tygstycke man har runt halsen.', 'Mormor stickade en varm sjal.'],
+        ['sjoman', 'sjöman', 'En person som arbetar på båt.', 'En sjöman ser många hav.'],
+        ['skjuta', 'skjuta', 'Att knuffa något framåt.', 'Kan du skjuta på kärran?'],
+        ['skjuts', 'skjuts', 'Att få åka med någon.', 'Vi fick skjuts till träningen av pappa.'],
+        ['skjul', 'skjul', 'En liten enkel byggnad.', 'Cyklarna står i ett skjul på gården.'],
+        ['stjala', 'stjäla', 'Att ta något som inte är ens eget.', 'Det är fel att stjäla.'],
+        ['stjalk', 'stjälk', 'Blommans stam.', 'Tulpanen har en lång grön stjälk.'],
+
+        // tj-ljud (tj, k)
+        ['tjock', 'tjock', 'Motsatsen till smal.', 'Boken var tjock som en tegelsten.'],
+        ['tjata', 'tjata', 'Att upprepa samma sak om och om igen.', 'Sluta tjata, jag kommer snart!'],
+        ['tjana', 'tjäna', 'Att få pengar för arbete.', 'Man kan tjäna pengar på att klippa gräs.'],
+        ['tjugo', 'tjugo', 'Talet efter nitton.', 'Det går tjugo elever i klassen.'],
+        ['kedja', 'kedja', 'Länkar som sitter ihop.', 'Cykelns kedja hoppade av.'],
+        ['kikare', 'kikare', 'Används för att se långt bort.', 'Med en kikare ser du fåglarna nära.'],
+        ['kampa', 'kämpa', 'Att försöka riktigt hårt.', 'Laget fick kämpa hela matchen.'],
+        ['kanna', 'känna', 'Att uppleva något, eller veta vem någon är.', 'Jag vill känna sanden mellan tårna.'],
+
+        // ng- och gn-ljud
+        ['manga', 'många', 'Ett stort antal.', 'Det var många barn i parken.'],
+        ['pengar', 'pengar', 'Det man betalar med.', 'Jag sparar pengar i en burk.'],
+        ['langta', 'längta', 'Att vilja något väldigt mycket.', 'Vi brukar längta efter sommarlovet.'],
+        ['kung', 'kung', 'Landets kungliga ledare.', 'Slottet byggdes av en kung.'],
+        ['tunga', 'tunga', 'Sitter i munnen och känner smak.', 'Glassen fastnade nästan på min tunga.'],
+        ['springa', 'springa', 'Att röra sig snabbt med benen.', 'Vi fick springa för att hinna med bussen.'],
+        ['vagn', 'vagn', 'Något med hjul som dras eller skjuts.', 'Bebisen sover i sin vagn.'],
+        ['regn', 'regn', 'Vatten som faller från molnen.', 'Efter regn kommer solsken.'],
+        ['lugn', 'lugn', 'Stilla och utan oro.', 'Han är alltid lugn före en match.'],
+        ['ugn', 'ugn', 'Där man gräddar mat.', 'Bullarna gräddas i en varm ugn.'],
+
+        // vanliga småord
+        ['ocksa', 'också', 'Dessutom, likaså.', 'Jag vill också följa med!'],
+        ['ibland', 'ibland', 'Då och då.', 'Vi äter tacos ibland på fredagar.'],
+        ['ganska', 'ganska', 'Rätt så.', 'Filmen var ganska spännande.'],
+        ['genast', 'genast', 'Med en gång.', 'Kom hit genast!'],
+        ['eftersom', 'eftersom', 'Därför att.', 'Vi stannade inne eftersom det regnade.'],
+        ['framfor', 'framför', 'På framsidan av något.', 'Bilen står parkerad framför huset.'],
+        ['bredvid', 'bredvid', 'Vid sidan av.', 'Jag sitter bredvid min bästa vän.'],
+        ['mellan', 'mellan', 'I mitten av två saker.', 'Bollen rullade in mellan träden.'],
+        ['tillbaka', 'tillbaka', 'Åter till samma plats.', 'Vi går tillbaka hem före mörkret.'],
+        ['fortfarande', 'fortfarande', 'Ännu, inte färdigt.', 'Det snöar fortfarande ute.'],
+
+        // å-ord
+        ['mandag', 'måndag', 'Veckans första dag.', 'På måndag börjar skolan igen.'],
+        ['fraga', 'fråga', 'Något man vill ha svar på.', 'Räck upp handen om du har en fråga.'],
+        ['lada', 'låda', 'En behållare med lock.', 'Leksakerna ligger i en låda.'],
+        ['forlat', 'förlåt', 'Det man säger när man ångrar sig.', 'Säg förlåt om du råkar knuffas.'],
+        ['vaning', 'våning', 'Ett plan i ett hus.', 'Huset har en övre våning.'],
+        ['aska', 'åska', 'Muller och blixtar på himlen.', 'Hunden gömmer sig när det är åska.'],
+        ['alder', 'ålder', 'Hur gammal någon är.', 'Vi är i samma ålder, båda tio år.'],
+        ['bada', 'båda', 'Två stycken tillsammans.', 'Vi vann båda matcherna.'],
+
+        // ä-ord
+        ['aventyr', 'äventyr', 'En spännande upplevelse.', 'Utflykten blev ett riktigt äventyr.'],
+        ['vader', 'väder', 'Sol, regn, vind och snö.', 'Vilket fint väder det är idag!'],
+        ['fardig', 'färdig', 'Klar med något.', 'Jag är färdig med läxan.'],
+        ['harlig', 'härlig', 'Riktigt skön eller god.', 'Det var en härlig dag på stranden.'],
+        ['saker', 'säker', 'Helt övertygad, eller trygg.', 'Jag är säker på att jag låste dörren.'],
+        ['tavling', 'tävling', 'När man gör upp om vem som vinner.', 'Vår klass vann en tävling i matte.'],
+        ['farg', 'färg', 'Rött, blått och gult är olika färger.', 'Vilken färg gillar du mest?'],
+        ['marke', 'märke', 'Ett tecken eller en fläck.', 'Bollen lämnade ett märke i väggen.'],
+        ['varld', 'värld', 'Hela jorden.', 'Det finns många länder i vår värld.'],
+        ['karlek', 'kärlek', 'Att tycka väldigt mycket om någon.', 'Farmor kramar oss med stor kärlek.'],
+
+        // skola och vardag
+        ['larare', 'lärare', 'Undervisar elever i skolan.', 'Vår lärare läser högt varje fredag.'],
+        ['telefon', 'telefon', 'Man ringer med den.', 'Mamma pratar i telefon med moster.'],
+        ['dator', 'dator', 'En maskin man skriver och spelar på.', 'Vi skriver berättelser på en dator i skolan.'],
+        ['fonster', 'fönster', 'Man ser ut genom det.', 'Öppna ett fönster och vädra!'],
+        ['present', 'present', 'Något man ger bort.', 'Jag slog in en present till kalaset.'],
+        ['kalas', 'kalas', 'En fest, ofta med tårta.', 'Alla i klassen var bjudna på kalas.'],
+        ['semester', 'semester', 'Ledighet från jobbet.', 'Pappa har semester hela juli.'],
+        ['bibliotek', 'bibliotek', 'Där man lånar böcker.', 'Vi lånade fem böcker på ett bibliotek.'],
+        ['sjukhus', 'sjukhus', 'Där sjuka får vård.', 'Ambulansen körde till ett sjukhus.'],
+        ['idrott', 'idrott', 'Sport och rörelse.', 'Min favoritlektion i skolan är idrott.'],
+        ['ryggsack', 'ryggsäck', 'Väska man bär på ryggen.', 'Packa din ryggsäck kvällen innan.'],
+        ['klassrum', 'klassrum', 'Rummet där klassen har lektion.', 'Vårt klassrum ligger på andra våningen.'],
+
+        // sch-ljud och låneord
+        ['schema', 'schema', 'Visar när lektionerna är.', 'Enligt vårt schema slutar vi klockan tre.'],
+        ['dusch', 'dusch', 'Där man tvättar sig stående.', 'Efter träningen tar jag en dusch.'],
+        ['match', 'match', 'En tävling mellan två lag.', 'Vi såg en spännande match i helgen.'],
+        ['mustasch', 'mustasch', 'Hår på överläppen.', 'Farfar har en grå mustasch.'],
+        ['garage', 'garage', 'Där bilen står inomhus.', 'Bilen står i vårt garage om natten.'],
+
+        // fler viktiga ord
+        ['nyckel', 'nyckel', 'Låser upp dörren.', 'Jag glömde min nyckel hemma.'],
+        ['cykel', 'cykel', 'Fordon med två hjul och pedaler.', 'Min cykel har fått punktering.'],
+        ['siffra', 'siffra', 'Tecken för tal, som 5 eller 9.', 'Skriv varje siffra tydligt.'],
+        ['spegel', 'spegel', 'Man ser sig själv i den.', 'Jag kammar mig framför en spegel.'],
+        ['fagel', 'fågel', 'Ett djur med vingar och fjädrar.', 'En fågel byggde bo i vår brevlåda.'],
     ]),
 
     ...defineWords(5, 'Åk 5', [
