@@ -27,7 +27,7 @@ import { X, Check, ArrowRight, ArrowLeft } from 'lucide-react';
 import './GameView.css';
 
 export default function GameView({ onBack }) {
-    const { activeTasks, logResult, points, addPoints, seenTasks, addSeenTask, getLatestScore, toggleTask } = useStore();
+    const { activeTasks, logResult, points, addPoints, history, getLatestScore, toggleTask } = useStore();
     const [currentTask, setCurrentTask] = useState(null);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
     const [isAnswered, setIsAnswered] = useState(false);
@@ -94,17 +94,36 @@ export default function GameView({ onBack }) {
             return;
         }
 
-        const randomTask = activeNotMastered[Math.floor(Math.random() * activeNotMastered.length)];
+        // Uppgiftsnivå: slumpa bland uppgifterna med färst antal rätt,
+        // så att alla områden kommer med
+        const correctByTask = {};
+        const correctByQuestion = {};
+        for (const entry of history) {
+            if (!entry.isCorrect) continue;
+            correctByTask[entry.taskId] = (correctByTask[entry.taskId] || 0) + 1;
+            if (entry.questionId) {
+                correctByQuestion[entry.questionId] = (correctByQuestion[entry.questionId] || 0) + 1;
+            }
+        }
+        const minCorrect = Math.min(...activeNotMastered.map(id => correctByTask[id] || 0));
+        const candidates = activeNotMastered.filter(id => (correctByTask[id] || 0) === minCorrect);
+        const randomTask = candidates[Math.floor(Math.random() * candidates.length)];
+
+        // Frågenivå: generera flera varianter och ta den med färst antal
+        // rätt, så att samma fråga inte återkommer hela tiden
         let task = null;
-        let tries = 0;
-        while (tries < 30) {
-            task = generateTask(randomTask);
-            task.taskId = randomTask; // Tag the output
-            if (!seenTasks.includes(task.equation)) break;
-            tries++;
+        let taskCorrectCount = Infinity;
+        for (let tries = 0; tries < 10; tries++) {
+            const candidate = generateTask(randomTask);
+            candidate.taskId = randomTask; // Tag the output
+            const count = correctByQuestion[candidate.questionId] || 0;
+            if (count < taskCorrectCount) {
+                task = candidate;
+                taskCorrectCount = count;
+            }
+            if (taskCorrectCount === 0 && tries >= 2) break;
         }
 
-        addSeenTask(task.equation);
         setCurrentTask(task);
         setTaskStartTime(Date.now());
     };

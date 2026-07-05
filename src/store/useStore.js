@@ -79,6 +79,7 @@ export const useStore = create(
                 const newEntry = {
                     id: Date.now().toString(),
                     taskId,
+                    questionId: taskData?.questionId || null,
                     isCorrect,
                     timestamp: Date.now(),
                     startTime: startTime || null,

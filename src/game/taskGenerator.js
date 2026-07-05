@@ -920,6 +920,8 @@ export const generateTask = (taskId) => {
             options = [];
             return {
                 id,
+                // Stabilt ID för just denna fråga — samma fråga ger samma ID
+                questionId: `${taskId}|${wordEntry.word}`,
                 taskId,
                 tags,
                 text,
@@ -944,5 +946,9 @@ export const generateTask = (taskId) => {
         options = generateOptions(correctAnswer, 0, 6, 4);
     }
 
-    return { id, taskId, tags, text, equation, correctAnswer, options, clockTime };
+    // Stabilt ID för just denna fråga — samma fråga ger samma ID oavsett
+    // när den genereras, så att svar kan räknas per fråga
+    const questionId = `${taskId}|${equation}|${text}`.replace(/\s+/g, ' ').trim();
+
+    return { id, questionId, taskId, tags, text, equation, correctAnswer, options, clockTime };
 };
