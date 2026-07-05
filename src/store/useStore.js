@@ -143,7 +143,7 @@ export const useStore = create(
         }),
         {
             name: 'math-school-app-storage',
-            version: 3,
+            version: 4,
             migrate: (persistedState, version) => {
                 if (version < 2) {
                     // Kategoristrukturen gjordes om till Åk 1-6 med nya
@@ -153,18 +153,29 @@ export const useStore = create(
                         activeTasks: getAllTaskIds(),
                     };
                 }
+                let state = persistedState;
                 if (version < 3) {
                     // 90 nya stavningsord för Åk 4 — kryssa i dem för
                     // befintliga installationer
-                    return {
-                        ...persistedState,
+                    state = {
+                        ...state,
                         activeTasks: Array.from(new Set([
-                            ...(persistedState.activeTasks || []),
+                            ...(state.activeTasks || []),
                             ...getSpellingTaskIdsForGrade(4),
                         ])),
                     };
                 }
-                return persistedState;
+                if (version < 4) {
+                    // Engelska glosor tillagda — kryssa i dem
+                    state = {
+                        ...state,
+                        activeTasks: Array.from(new Set([
+                            ...(state.activeTasks || []),
+                            ...getAllTaskIds().filter(id => id.startsWith('eng_ak')),
+                        ])),
+                    };
+                }
+                return state;
             },
         }
     )

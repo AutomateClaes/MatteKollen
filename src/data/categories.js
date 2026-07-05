@@ -1,4 +1,5 @@
 import { SPELLING_TASKS, getSpellingTaskIdsForGrade } from './spellingWords.js';
+import { ENGLISH_MODES, getEnglishWordsForGrade, englishWordSlug } from './englishWords.js';
 
 // Bygger Stavning-kategorin för en årskurs: varje ord är en egen underkategori
 const spellingCategory = (grade, color) => ({
@@ -11,6 +12,29 @@ const spellingCategory = (grade, color) => ({
         tasks: [{ id: taskId, name: SPELLING_TASKS[taskId].name }]
     }))
 });
+
+// Bygger Engelska-kategorin: fyra övningslägen, varje ord en egen rad.
+// Returnerar null för årskurser utan engelska glosor.
+const englishCategory = (grade, color) => {
+    const words = getEnglishWordsForGrade(grade);
+    if (words.length === 0) return null;
+    return {
+        id: `engelska_ak${grade}`,
+        name: 'Engelska',
+        color,
+        subcategories: ENGLISH_MODES.map(mode => ({
+            id: `eng_ak${grade}_${mode.key}`,
+            name: mode.name,
+            tasks: words.map(w => ({
+                id: `eng_ak${grade}_${mode.key}_${englishWordSlug(w.en)}`,
+                name: `${w.en} – ${w.sv}`
+            }))
+        }))
+    };
+};
+
+// Lägger till valfria kategorier (utan null)
+const withOptional = (...cats) => cats.filter(Boolean);
 
 export const GRADE_LEVELS = [
     {
@@ -129,7 +153,8 @@ export const GRADE_LEVELS = [
                     }
                 ]
             },
-            spellingCategory(3, "#20B2AA")
+            spellingCategory(3, "#20B2AA"),
+            ...withOptional(englishCategory(3, "#5B8DEF"))
         ]
     },
     {
@@ -155,7 +180,8 @@ export const GRADE_LEVELS = [
                     { id: "strategier", name: "Strategier för problem", tasks: [{ id: "strategier", name: "Strategier för problem" }] }
                 ]
             },
-            spellingCategory(4, "#20B2AA")
+            spellingCategory(4, "#20B2AA"),
+            ...withOptional(englishCategory(4, "#5B8DEF"))
         ]
     },
     {
@@ -188,7 +214,8 @@ export const GRADE_LEVELS = [
                     { id: "historiska_talsystem", name: "Historiska talsystem", tasks: [{ id: "historiska_talsystem", name: "Historiska talsystem" }] }
                 ]
             },
-            spellingCategory(5, "#20B2AA")
+            spellingCategory(5, "#20B2AA"),
+            ...withOptional(englishCategory(5, "#5B8DEF"))
         ]
     },
     {
@@ -218,7 +245,8 @@ export const GRADE_LEVELS = [
                     { id: "formulera_problem", name: "Formulera matematiska frågeställningar", tasks: [{ id: "formulera_problem", name: "Formulera matematiska frågeställningar" }] }
                 ]
             },
-            spellingCategory(6, "#20B2AA")
+            spellingCategory(6, "#20B2AA"),
+            ...withOptional(englishCategory(6, "#5B8DEF"))
         ]
     }
 ];

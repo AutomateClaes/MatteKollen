@@ -40,11 +40,11 @@ export default function GameView({ onBack }) {
     const [spellingShake, setSpellingShake] = useState(false);
     const [revealedAnswer, setRevealedAnswer] = useState(false);
 
-    const speakWord = (word) => {
+    const speakWord = (word, lang = 'sv-SE') => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(word);
-        utter.lang = 'sv-SE';
+        utter.lang = lang;
         utter.rate = 0.85;
         window.speechSynthesis.speak(utter);
     };
@@ -57,7 +57,7 @@ export default function GameView({ onBack }) {
     useEffect(() => {
         if (currentTask?.type === 'spelling') {
             setSpellingInput('');
-            setTimeout(() => speakWord(currentTask.wordToSpeak), 400);
+            setTimeout(() => speakWord(currentTask.wordToSpeak, currentTask.speakLang), 400);
         }
     }, [currentTask?.id]);
 
@@ -190,7 +190,7 @@ export default function GameView({ onBack }) {
             logResult(currentTask.taskId, false, { ...currentTask, revealedAnswer: true }, taskStartTime, Date.now());
         }
         setAttempts(a => a + 1);
-        speakWord(currentTask.correctAnswer);
+        speakWord(currentTask.correctAnswer, currentTask.answerLang);
     };
 
     const handleAnswer = (answer) => {
@@ -282,7 +282,7 @@ export default function GameView({ onBack }) {
                                         className="btn-listen"
                                         whileHover={{ scale: 1.08 }}
                                         whileTap={{ scale: 0.92 }}
-                                        onClick={() => speakWord(currentTask.wordToSpeak)}
+                                        onClick={() => speakWord(currentTask.wordToSpeak, currentTask.speakLang)}
                                     >
                                         🔊 Lyssna igen
                                     </motion.button>
@@ -341,7 +341,7 @@ export default function GameView({ onBack }) {
                                             animate={{ scale: 1, opacity: 1 }}
                                         >
                                             {isCorrect ? (
-                                                <><Check size={48} /><span>Rätt stavat! 🎉</span></>
+                                                <><Check size={48} /><span>{currentTask.isGlosa ? 'Rätt översatt! 🎉' : 'Rätt stavat! 🎉'}</span></>
                                             ) : (
                                                 <><X size={48} /><span>Försök igen!</span></>
                                             )}

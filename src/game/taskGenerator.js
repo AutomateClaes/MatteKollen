@@ -1,5 +1,6 @@
 
 import { getSpellingTask } from '../data/spellingWords.js';
+import { getEnglishWordsForGrade, getEnglishWordBySlug, englishWordSlug } from '../data/englishWords.js';
 
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 
@@ -933,6 +934,58 @@ export const generateTask = (taskId) => {
                 wordToSpeak: wordEntry.word,
                 wordMeaning: wordEntry.meaning,
             };
+        }
+    }
+
+    // --- Engelska glosor ---
+    else if (taskId.startsWith('eng_ak')) {
+        const m = taskId.match(/^eng_ak(\d+)_(ensv|sven)_(txt|val)_(.+)$/);
+        const word = m ? getEnglishWordBySlug(parseInt(m[1]), m[4]) : null;
+        if (word) {
+            const grade = parseInt(m[1]);
+            const engToSwe = m[2] === 'ensv';
+            const shown = engToSwe ? word.en : word.sv;
+            const answer = engToSwe ? word.sv : word.en;
+            tags = ['Engelska', `Åk ${grade}`];
+            correctAnswer = answer;
+            const questionId = `${taskId}|${word.en}`;
+
+            if (m[3] === 'txt') {
+                // Fritextsvar — återanvänder stavningsläget med TTS på rätt språk
+                return {
+                    id,
+                    questionId,
+                    taskId,
+                    tags,
+                    text: engToSwe
+                        ? `Vad betyder "${shown}" på svenska?`
+                        : `Vad heter "${shown}" på engelska?`,
+                    equation: '',
+                    correctAnswer,
+                    options: [],
+                    clockTime: null,
+                    type: 'spelling',
+                    isGlosa: true,
+                    wordToSpeak: shown,
+                    speakLang: engToSwe ? 'en-GB' : 'sv-SE',
+                    answerLang: engToSwe ? 'sv-SE' : 'en-GB',
+                };
+            }
+
+            // Fyra alternativ — distraktorer från andra ord i samma årskurs
+            const pool = getEnglishWordsForGrade(grade)
+                .filter(w => englishWordSlug(w.en) !== m[4])
+                .map(w => (engToSwe ? w.sv : w.en))
+                .filter(o => o !== answer);
+            const distractors = [];
+            while (distractors.length < 3 && pool.length > 0) {
+                const idx = randomInt(0, pool.length - 1);
+                distractors.push(pool.splice(idx, 1)[0]);
+            }
+            equation = shown;
+            text = engToSwe ? 'Vad betyder ordet på svenska?' : 'Vad heter ordet på engelska?';
+            options = [answer, ...distractors].sort(() => Math.random() - 0.5);
+            return { id, questionId, taskId, tags, text, equation, correctAnswer, options, clockTime: null };
         }
     }
 
