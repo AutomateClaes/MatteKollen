@@ -105,23 +105,47 @@ export default function GameView({ onBack }) {
                 correctByQuestion[entry.questionId] = (correctByQuestion[entry.questionId] || 0) + 1;
             }
         }
-        const minCorrect = Math.min(...activeNotMastered.map(id => correctByTask[id] || 0));
-        const candidates = activeNotMastered.filter(id => (correctByTask[id] || 0) === minCorrect);
-        const randomTask = candidates[Math.floor(Math.random() * candidates.length)];
+        // Uppgifter med färst rätt först, slumpad ordning vid lika antal
+        const orderedTasks = [...activeNotMastered]
+            .sort(() => Math.random() - 0.5)
+            .sort((a, b) => (correctByTask[a] || 0) - (correctByTask[b] || 0));
 
         // Frågenivå: generera flera varianter och ta den med färst antal
-        // rätt, så att samma fråga inte återkommer hela tiden
-        let task = null;
-        let taskCorrectCount = Infinity;
-        for (let tries = 0; tries < 10; tries++) {
-            const candidate = generateTask(randomTask);
-            candidate.taskId = randomTask; // Tag the output
-            const count = correctByQuestion[candidate.questionId] || 0;
-            if (count < taskCorrectCount) {
-                task = candidate;
-                taskCorrectCount = count;
+        // rätt — aldrig exakt samma fråga två gånger i rad, och helst
+        // inte ens samma frågetext (t.ex. "Hur många gillar Äpple?")
+        const lastQuestionId = currentTask?.questionId || null;
+        const lastText = currentTask?.text || null;
+        const pickFrom = (candidateTaskId, requireDifferentText) => {
+            let best = null;
+            let bestCount = Infinity;
+            for (let tries = 0; tries < 12; tries++) {
+                const candidate = generateTask(candidateTaskId);
+                candidate.taskId = candidateTaskId; // Tag the output
+                if (candidate.questionId === lastQuestionId) continue;
+                if (requireDifferentText && lastText && candidate.text === lastText) continue;
+                const count = correctByQuestion[candidate.questionId] || 0;
+                if (count < bestCount) {
+                    best = candidate;
+                    bestCount = count;
+                }
+                if (bestCount === 0 && tries >= 2) break;
             }
-            if (taskCorrectCount === 0 && tries >= 2) break;
+            return best;
+        };
+        let task = null;
+        for (const candidateTaskId of orderedTasks) {
+            // Först med krav på annan text; annars räcker annan fråga
+            // (uppgifter som "Vilket tal saknas?" har alltid samma text)
+            task = pickFrom(candidateTaskId, true) || pickFrom(candidateTaskId, false);
+            if (task) break;
+            // Uppgiftens enda möjliga fråga är samma som förra —
+            // prova nästa uppgift istället
+        }
+        if (!task) {
+            // Alla aktiva uppgifter kan bara ge samma fråga som förra
+            // (t.ex. ett enda stavningsord) — tillåt då repetition
+            task = generateTask(orderedTasks[0]);
+            task.taskId = orderedTasks[0];
         }
 
         setCurrentTask(task);
