@@ -985,7 +985,22 @@ export const generateTask = (taskId) => {
             equation = shown;
             text = engToSwe ? 'Vad betyder ordet på svenska?' : 'Vad heter ordet på engelska?';
             options = [answer, ...distractors].sort(() => Math.random() - 0.5);
-            return { id, questionId, taskId, tags, text, equation, correctAnswer, options, clockTime: null };
+            const result = { id, questionId, taskId, tags, text, equation, correctAnswer, options, clockTime: null };
+
+            if (engToSwe && word.sentence) {
+                // Meningen visas med målordet i fetstil och kan läsas upp
+                const match = word.sentence.match(new RegExp(`\\b${word.en}\\b`));
+                result.sentence = word.sentence;
+                result.speakLang = 'en-GB';
+                result.sentenceParts = match
+                    ? [word.sentence.slice(0, match.index), word.en, word.sentence.slice(match.index + word.en.length)]
+                    : ['', '', word.sentence];
+            } else if (!engToSwe) {
+                // Lyssnaknapp som läser upp de engelska svarsalternativen
+                result.speakOptions = true;
+                result.optionsLang = 'en-GB';
+            }
+            return result;
         }
     }
 

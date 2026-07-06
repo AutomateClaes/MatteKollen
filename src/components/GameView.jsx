@@ -39,6 +39,7 @@ export default function GameView({ onBack }) {
     const [spellingInput, setSpellingInput] = useState('');
     const [spellingShake, setSpellingShake] = useState(false);
     const [revealedAnswer, setRevealedAnswer] = useState(false);
+    const [speakingOption, setSpeakingOption] = useState(null);
 
     const speakWord = (word, lang = 'sv-SE') => {
         if (!window.speechSynthesis) return;
@@ -61,7 +62,32 @@ export default function GameView({ onBack }) {
         }
     }, [currentTask?.id]);
 
+    // Läser upp svarsalternativen i tur och ordning och markerar
+    // knappen som just läses upp
+    const speakOptionsInTurn = () => {
+        if (!window.speechSynthesis || !currentTask?.options?.length) return;
+        window.speechSynthesis.cancel();
+        const opts = currentTask.options;
+        let i = 0;
+        const next = () => {
+            if (i >= opts.length) {
+                setSpeakingOption(null);
+                return;
+            }
+            setSpeakingOption(i);
+            const utter = new SpeechSynthesisUtterance(String(opts[i]));
+            utter.lang = currentTask.optionsLang || 'en-GB';
+            utter.rate = 0.8;
+            utter.onend = () => { i++; setTimeout(next, 300); };
+            utter.onerror = () => { setSpeakingOption(null); };
+            window.speechSynthesis.speak(utter);
+        };
+        next();
+    };
+
     const loadNextTask = () => {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        setSpeakingOption(null);
         setIsAnswered(false);
         setSelectedAnswer(null);
         setIsCorrect(null);
@@ -351,6 +377,25 @@ export default function GameView({ onBack }) {
                             ) : (
                                 /* ─── Normal: equation + multiple choice ─────── */
                                 <>
+                                    {/* Glosmening med målordet i fetstil + uppläsning */}
+                                    {currentTask.sentenceParts && (
+                                        <div className="glosa-sentence-block">
+                                            <p className="glosa-sentence">
+                                                {currentTask.sentenceParts[0]}
+                                                <strong>{currentTask.sentenceParts[1]}</strong>
+                                                {currentTask.sentenceParts[2]}
+                                            </p>
+                                            <motion.button
+                                                className="btn-listen"
+                                                whileHover={{ scale: 1.08 }}
+                                                whileTap={{ scale: 0.92 }}
+                                                onClick={() => speakWord(currentTask.sentence, currentTask.speakLang)}
+                                            >
+                                                🔊 Lyssna på meningen
+                                            </motion.button>
+                                        </div>
+                                    )}
+
                                     {/* The Visual Representation */}
                                     <div className={`visual-equation ${String(currentTask.equation || '').length > 20 ? (String(currentTask.equation || '').length > 35 ? 'text-sm' : 'text-md') : ''}`}>
                                         {currentTask.tags.includes('Klockan') ? (
@@ -391,6 +436,18 @@ export default function GameView({ onBack }) {
                                         )}
                                     </div>
 
+                                    {/* Uppläsning av svarsalternativen (sve→eng) */}
+                                    {currentTask.speakOptions && (
+                                        <motion.button
+                                            className="btn-listen"
+                                            whileHover={{ scale: 1.08 }}
+                                            whileTap={{ scale: 0.92 }}
+                                            onClick={speakOptionsInTurn}
+                                        >
+                                            🔊 Lyssna på orden
+                                        </motion.button>
+                                    )}
+
                                     {/* Multiple Choice Answers */}
                                     <div className="answers-grid">
                                         {currentTask.options.map((option, index) => {
@@ -411,6 +468,9 @@ export default function GameView({ onBack }) {
                                                 btnClass += " text-sm";
                                             } else if (optStr.length >= 7) {
                                                 btnClass += " text-md";
+                                            }
+                                            if (speakingOption === index) {
+                                                btnClass += " speaking";
                                             }
 
                                             return (
