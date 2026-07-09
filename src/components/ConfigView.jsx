@@ -1,9 +1,83 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { GRADE_LEVELS } from '../data/categories';
-import { Settings, Play, CheckCircle2, Circle, MinusCircle, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { Settings, Play, CheckCircle2, Circle, MinusCircle, ChevronDown, ChevronRight, Trash2, Users, LogOut, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuthStore } from '../store/useAuthStore';
+import { logout, fetchFamilyOverview, stopSync } from '../sync';
 import './ConfigView.css';
+
+function FamilySection() {
+    const { user, profile, localMode, syncState, clearProfile, exitLocalMode } = useAuthStore();
+    const [overview, setOverview] = useState(null);
+    const [loadingOverview, setLoadingOverview] = useState(false);
+
+    const showOverview = async () => {
+        setLoadingOverview(true);
+        try {
+            setOverview(await fetchFamilyOverview());
+        } catch {
+            setOverview([]);
+        } finally {
+            setLoadingOverview(false);
+        }
+    };
+
+    const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' };
+    const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)' };
+
+    if (localMode) {
+        return (
+            <div className="family-section glass" style={{ ...rowStyle, background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Spelar utan konto — framsteg sparas bara på den här enheten.</span>
+                <button style={btnStyle} onClick={exitLocalMode}>Logga in och synka</button>
+            </div>
+        );
+    }
+
+    if (!user || !profile) return null;
+
+    const syncLabel = { loading: 'synkar…', synced: 'synkad ✓', error: 'synkfel!', idle: '' }[syncState] || '';
+
+    return (
+        <div className="family-section glass" style={{ background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            <div style={rowStyle}>
+                <Users size={18} color="var(--color-primary)" />
+                <strong>{profile.name}</strong>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{syncLabel}</span>
+                <span style={{ flex: 1 }} />
+                <button style={btnStyle} onClick={() => { stopSync(); clearProfile(); }}>
+                    <RefreshCw size={15} /> Byt profil
+                </button>
+                <button style={btnStyle} onClick={logout}>
+                    <LogOut size={15} /> Logga ut
+                </button>
+            </div>
+            <div>
+                {overview === null ? (
+                    <button style={btnStyle} onClick={showOverview} disabled={loadingOverview}>
+                        {loadingOverview ? 'Hämtar…' : 'Visa familjeöversikt'}
+                    </button>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {overview.map(p => (
+                            <div key={p.id} style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem', flexWrap: 'wrap', background: 'white', borderRadius: '8px', padding: '0.5rem 0.8rem' }}>
+                                <strong style={{ minWidth: '6rem' }}>{p.name}</strong>
+                                <span>⭐ {p.points} p</span>
+                                <span>✅ {p.totalSolved} lösta</span>
+                                <span>👁 {p.revealedCount} visade svar</span>
+                                <span style={{ color: 'var(--color-text-muted)' }}>
+                                    {p.lastActivity ? `senast ${new Date(p.lastActivity).toLocaleDateString('sv-SE')}` : 'ingen aktivitet än'}
+                                </span>
+                            </div>
+                        ))}
+                        {overview.length === 0 && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Kunde inte hämta översikten.</span>}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function ConfigView({ onStartPlay }) {
     const { activeTasks, toggleTask, toggleSubcategory, toggleCategory, toggleGradeLevel, getLatestScore, masteryThreshold, setMasteryThreshold, resetProgress } = useStore();
@@ -75,6 +149,8 @@ export default function ConfigView({ onStartPlay }) {
                         Nollställ Resultat
                     </button>
                 </div>
+
+                <FamilySection />
             </header>
 
             <div className="categories-list">
