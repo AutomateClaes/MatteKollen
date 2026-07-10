@@ -6,9 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
 import {
     logout, fetchFamilyOverview, stopSync, loginWithGoogle, listProfiles,
-    createProfile, activateProfile, requestDeviceLink, getPendingLinkRequest,
-    cancelDeviceLink, unlinkDevice, fetchPendingLinkRequests,
-    approveLinkRequest, denyLinkRequest,
+    createProfile, activateProfile, startChildLogin, getPendingLinkCode,
+    cancelDeviceLink, unlinkDevice, linkDeviceByCode,
 } from '../sync';
 import './ConfigView.css';
 
@@ -18,48 +17,57 @@ function FamilySection() {
     const [loadingOverview, setLoadingOverview] = useState(false);
     const [profiles, setProfiles] = useState(null);
     const [newName, setNewName] = useState('');
+    const [newAge, setNewAge] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    const [linkMode, setLinkMode] = useState(false);
-    const [linkEmail, setLinkEmail] = useState('');
-    const [waitingApproval, setWaitingApproval] = useState(false);
-    const [linkRequests, setLinkRequests] = useState([]);
+    const [childCode, setChildCode] = useState(null);
+    const [addDeviceFor, setAddDeviceFor] = useState(null);
+    const [deviceCode, setDeviceCode] = useState('');
+    const [linkSuccess, setLinkSuccess] = useState(null);
 
     const isParent = !!user && !user.isAnonymous;
     const isLinkedChild = !!user?.isAnonymous && !!linkedFamily;
 
+    const refreshParentData = () => {
+        listProfiles()
+            .then(setProfiles)
+            .catch(() => setError('Kunde inte hämta profiler. Kontrollera internet.'));
+        setLoadingOverview(true);
+        fetchFamilyOverview()
+            .then(setOverview)
+            .catch(() => setOverview([]))
+            .finally(() => setLoadingOverview(false));
+    };
+
     React.useEffect(() => {
-        if (isParent) {
-            listProfiles()
-                .then(setProfiles)
-                .catch(() => setError('Kunde inte hämta profiler. Kontrollera internet.'));
-            fetchPendingLinkRequests().then(setLinkRequests).catch(() => { });
-            setLoadingOverview(true);
-            fetchFamilyOverview()
-                .then(setOverview)
-                .catch(() => setOverview([]))
-                .finally(() => setLoadingOverview(false));
-        }
+        if (isParent) refreshParentData();
     }, [isParent]);
 
     React.useEffect(() => {
         if (user?.isAnonymous && !linkedFamily) {
-            getPendingLinkRequest().then(p => { if (p) setWaitingApproval(true); });
+            // Återuppta pågående kodvisning efter omstart
+            getPendingLinkCode().then(code => { if (code) setChildCode(code); });
         }
+        if (linkedFamily) setChildCode(null);
     }, [user, linkedFamily]);
 
-    // Föräldrapanel: veckostatus per barn (delas av båda förälderlägena)
+    const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' };
+    const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', cursor: 'pointer' };
+    const inputStyle = { padding: '0.5rem 0.8rem', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'var(--font-body)' };
+    const sectionStyle = { background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' };
+
+    // Föräldrapanel: veckostatus + enhetskoppling per barn, samt skapa barn
     const dashboardBlock = (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <strong style={{ fontSize: '0.9rem', color: 'var(--color-primary)' }}>👨‍👩‍👧‍👦 Föräldrapanel</strong>
             {loadingOverview && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar…</span>}
             {overview && overview.length === 0 && !loadingOverview && (
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Inga barnprofiler än — skapa en nedan.</span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Inga barn än — lägg till nedan.</span>
             )}
             {(overview || []).map(p => (
-                <div key={p.id} style={{ background: 'white', borderRadius: '8px', padding: '0.6rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <div key={p.id} style={{ background: 'white', borderRadius: '8px', padding: '0.6rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                        <strong>{p.name}</strong>
+                        <strong>{p.name}{p.age ? `, ${p.age} år` : ''}</strong>
                         <span style={{ fontSize: '0.9rem' }}>⭐ {p.points} p</span>
                         <span style={{ flex: 1 }} />
                         <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
@@ -71,14 +79,85 @@ function FamilySection() {
                         <span style={{ color: 'var(--color-success)' }}>{p.weekSolved} rätt{p.weekAnswers > 0 ? ` (${Math.round(100 * p.weekSolved / Math.max(p.weekAnswers, 1))}%)` : ''}</span>
                         {p.weekRevealed > 0 && <span style={{ color: 'var(--color-accent)' }}>👁 {p.weekRevealed} visade svar</span>}
                     </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {addDeviceFor === p.id ? (
+                            <>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="Kod från barnets skärm"
+                                    value={deviceCode}
+                                    maxLength={6}
+                                    onChange={e => setDeviceCode(e.target.value.replace(/\D/g, ''))}
+                                    style={{ ...inputStyle, width: '180px' }}
+                                />
+                                <button style={btnStyle} disabled={busy || deviceCode.length !== 6} onClick={async () => {
+                                    setError(null);
+                                    setBusy(true);
+                                    try {
+                                        await linkDeviceByCode(deviceCode, p);
+                                        setLinkSuccess(p.name);
+                                        setAddDeviceFor(null);
+                                        setDeviceCode('');
+                                    } catch (err) {
+                                        setError(err.message || 'Kunde inte koppla enheten.');
+                                    } finally {
+                                        setBusy(false);
+                                    }
+                                }}>Koppla</button>
+                                <button style={btnStyle} onClick={() => { setAddDeviceFor(null); setDeviceCode(''); }}>Avbryt</button>
+                            </>
+                        ) : (
+                            <button style={{ ...btnStyle, padding: '0.35rem 0.7rem', fontSize: '0.85rem' }} onClick={() => {
+                                setAddDeviceFor(p.id);
+                                setDeviceCode('');
+                                setLinkSuccess(null);
+                            }}>
+                                📱 Lägg till enhet
+                            </button>
+                        )}
+                    </div>
                 </div>
             ))}
+            {linkSuccess && (
+                <span style={{ color: 'var(--color-success)', fontSize: '0.9rem' }}>
+                    ✅ Enheten är nu kopplad till {linkSuccess} — den börjar synka direkt.
+                </span>
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                    type="text"
+                    placeholder="Barnets namn…"
+                    value={newName}
+                    maxLength={30}
+                    onChange={e => setNewName(e.target.value)}
+                    style={{ ...inputStyle, flex: 1, minWidth: '140px' }}
+                />
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Ålder"
+                    value={newAge}
+                    maxLength={2}
+                    onChange={e => setNewAge(e.target.value.replace(/\D/g, ''))}
+                    style={{ ...inputStyle, width: '70px' }}
+                />
+                <button style={btnStyle} disabled={busy || !newName.trim()} onClick={async () => {
+                    setBusy(true);
+                    try {
+                        await createProfile(newName.trim(), newAge ? parseInt(newAge) : null);
+                        setNewName('');
+                        setNewAge('');
+                        refreshParentData();
+                    } catch { setError('Kunde inte skapa barnet.'); }
+                    finally { setBusy(false); }
+                }}>
+                    Lägg till barn
+                </button>
+            </div>
+            {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</span>}
         </div>
     );
-
-    const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' };
-    const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', cursor: 'pointer' };
-    const sectionStyle = { background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' };
 
     if (authLoading) return null;
 
@@ -98,17 +177,23 @@ function FamilySection() {
         );
     }
 
-    // Barnenhet som väntar på förälderns godkännande
-    if (user?.isAnonymous && waitingApproval) {
+    // Barnenhet som visar sin kod och väntar på godkännande
+    if (user?.isAnonymous && childCode) {
         return (
-            <div className="family-section glass" style={{ ...sectionStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
-                    ⏳ Väntar på godkännande — öppna MatteKollen på förälderns enhet, gå till inställningarna och godkänn kopplingen.
-                </span>
-                <button style={btnStyle} onClick={async () => {
-                    await cancelDeviceLink();
-                    setWaitingApproval(false);
-                }}>Avbryt</button>
+            <div className="family-section glass" style={sectionStyle}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center', textAlign: 'center' }}>
+                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                        Visa koden för din förälder — den slås in under "Lägg till enhet" i förälderns app:
+                    </span>
+                    <strong style={{ fontSize: '2.4rem', letterSpacing: '0.3em', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)', paddingLeft: '0.3em' }}>
+                        {childCode}
+                    </strong>
+                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>⏳ Väntar på förälderns godkännande…</span>
+                    <button style={btnStyle} onClick={async () => {
+                        await cancelDeviceLink();
+                        setChildCode(null);
+                    }}>Avbryt</button>
+                </div>
             </div>
         );
     }
@@ -119,7 +204,7 @@ function FamilySection() {
             <div className="family-section glass" style={sectionStyle}>
                 <div style={rowStyle}>
                     <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
-                        Framsteg sparas bara på den här enheten. Synka genom att logga in — eller koppla barnets enhet till en förälder.
+                        Framsteg sparas bara på den här enheten. Logga in som förälder — eller logga in barnet med en kod.
                     </span>
                 </div>
                 <div style={rowStyle}>
@@ -137,67 +222,26 @@ function FamilySection() {
                     }}>
                         <Users size={15} /> Logga in med Google (förälder)
                     </button>
-                    {!linkMode && (
-                        <button style={btnStyle} onClick={() => setLinkMode(true)}>
-                            Koppla till förälders konto
-                        </button>
-                    )}
+                    <button style={btnStyle} disabled={busy} onClick={async () => {
+                        setError(null);
+                        setBusy(true);
+                        try {
+                            const code = await startChildLogin();
+                            setChildCode(code);
+                        } catch (err) {
+                            console.error(err);
+                            setError('Kunde inte hämta en kod. Kontrollera internet.');
+                        } finally {
+                            setBusy(false);
+                        }
+                    }}>
+                        🧒 Logga in barn
+                    </button>
                 </div>
-                {linkMode && (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <input
-                            type="email"
-                            placeholder="Förälderns e-postadress…"
-                            value={linkEmail}
-                            onChange={e => setLinkEmail(e.target.value)}
-                            style={{ flex: 1, minWidth: '200px', padding: '0.5rem 0.8rem', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'var(--font-body)' }}
-                        />
-                        <button style={btnStyle} disabled={busy || !linkEmail.includes('@')} onClick={async () => {
-                            setError(null);
-                            setBusy(true);
-                            try {
-                                await requestDeviceLink(linkEmail);
-                                setWaitingApproval(true);
-                            } catch (err) {
-                                console.error(err);
-                                setError('Kunde inte skicka förfrågan. Kontrollera internet.');
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}>
-                            Skicka förfrågan
-                        </button>
-                    </div>
-                )}
                 {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</span>}
             </div>
         );
     }
-
-    // Förälderns väntande parkopplingsförfrågningar (visas i båda förälderlägena)
-    const requestsBlock = linkRequests.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: '#FFF7E6', borderRadius: '8px', padding: '0.6rem 0.8rem', border: '1px solid #FFD591' }}>
-            {linkRequests.map(req => (
-                <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.9rem' }}>📱 En enhet vill kopplas — välj profil:</span>
-                    {(profiles || []).map(p => (
-                        <button key={p.id} style={btnStyle} onClick={async () => {
-                            try {
-                                await approveLinkRequest(req, p);
-                                setLinkRequests(rs => rs.filter(r => r.id !== req.id));
-                            } catch { setError('Kunde inte godkänna.'); }
-                        }}>
-                            ✓ {p.name}
-                        </button>
-                    ))}
-                    <button style={{ ...btnStyle, color: 'var(--color-error)' }} onClick={async () => {
-                        await denyLinkRequest(req);
-                        setLinkRequests(rs => rs.filter(r => r.id !== req.id));
-                    }}>Neka</button>
-                </div>
-            ))}
-        </div>
-    );
 
     // Inloggad men ingen profil vald för enheten: profilväljare
     if (!profile) {
@@ -209,41 +253,22 @@ function FamilySection() {
                     <span style={{ flex: 1 }} />
                     <button style={btnStyle} onClick={logout}><LogOut size={15} /> Logga ut</button>
                 </div>
-                {requestsBlock}
                 {dashboardBlock}
-                {profiles === null && !error && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar profiler…</span>}
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    {(profiles || []).map(p => (
-                        <button key={p.id} style={btnStyle} disabled={busy} onClick={async () => {
-                            setBusy(true);
-                            try { await activateProfile({ id: p.id, name: p.name }); }
-                            catch { setError('Kunde inte ladda profilen.'); setBusy(false); }
-                        }}>
-                            {p.name}
-                        </button>
-                    ))}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>Ska ett barn öva på den här enheten? Välj profil:</span>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {(profiles || []).map(p => (
+                            <button key={p.id} style={btnStyle} disabled={busy} onClick={async () => {
+                                setBusy(true);
+                                try { await activateProfile({ id: p.id, name: p.name }); }
+                                catch { setError('Kunde inte ladda profilen.'); setBusy(false); }
+                            }}>
+                                {p.name}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                        type="text"
-                        placeholder="Nytt barns namn…"
-                        value={newName}
-                        maxLength={30}
-                        onChange={e => setNewName(e.target.value)}
-                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'var(--font-body)' }}
-                    />
-                    <button style={btnStyle} disabled={busy || !newName.trim()} onClick={async () => {
-                        setBusy(true);
-                        try {
-                            const p = await createProfile(newName.trim());
-                            await activateProfile(p);
-                        } catch { setError('Kunde inte skapa profilen.'); setBusy(false); }
-                    }}>
-                        Skapa profil
-                    </button>
-                </div>
-                {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</span>}
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Enhetens nuvarande framsteg blir profilens startläge om profilen är ny. Inloggad som {user.email}</span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Inloggad som {user.email}</span>
             </div>
         );
     }
@@ -264,7 +289,6 @@ function FamilySection() {
                     <LogOut size={15} /> Logga ut
                 </button>
             </div>
-            {requestsBlock}
             {dashboardBlock}
         </div>
     );

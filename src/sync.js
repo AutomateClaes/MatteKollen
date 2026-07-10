@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import {
     doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs,
-    query, where, onSnapshot, serverTimestamp, deleteDoc,
+    onSnapshot, serverTimestamp, deleteDoc,
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { useStore } from './store/useStore';
@@ -133,57 +133,77 @@ export const stopSync = () => {
 
 // --- Parkoppling: barnets enhet ---
 
-// Skicka förfrågan till förälderns e-post och vänta på godkännande
-export const requestDeviceLink = async (parentEmail) => {
+const LINK_CODE_KEY = 'mk-link-code';
+
+// "Logga in barn": generera en sexsiffrig kod som föräldern slår in.
+// Returnerar koden; enheten lyssnar sedan på godkännandet.
+export const startChildLogin = async () => {
     if (!auth.currentUser) {
         await signInAnonymously(auth);
     }
     const deviceUid = auth.currentUser.uid;
-    await setDoc(doc(db, 'linkRequests', deviceUid), {
-        deviceUid,
-        parentEmail: parentEmail.trim().toLowerCase(),
-        status: 'pending',
-        createdAt: serverTimestamp(),
-    });
-    watchDeviceLink();
+    // Försök tills en ledig kod hittas (krock är extremt osannolik)
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        try {
+            await setDoc(doc(db, 'linkRequests', code), {
+                deviceUid,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+            });
+            localStorage.setItem(LINK_CODE_KEY, code);
+            watchDeviceLink(code);
+            return code;
+        } catch (err) {
+            // Upptagen kod ger permission denied (update nekas) — prova nästa
+            if (attempt === 4) throw err;
+        }
+    }
+    return null;
 };
 
 // Lyssna på svaret — när föräldern godkänt aktiveras synken automatiskt
-export const watchDeviceLink = () => {
-    if (!auth.currentUser) return;
+export const watchDeviceLink = (code) => {
     if (unsubscribeLinkWatch) unsubscribeLinkWatch();
-    unsubscribeLinkWatch = onSnapshot(doc(db, 'linkRequests', auth.currentUser.uid), async (snap) => {
+    unsubscribeLinkWatch = onSnapshot(doc(db, 'linkRequests', code), async (snap) => {
         const data = snap.data();
-        if (data?.status === 'approved') {
+        if (data?.status === 'approved' && data.deviceUid === auth.currentUser?.uid) {
             unsubscribeLinkWatch();
             unsubscribeLinkWatch = null;
+            localStorage.removeItem(LINK_CODE_KEY);
             useAuthStore.getState().setLinkedFamily({
                 familyUid: data.familyUid,
                 profileId: data.profileId,
                 profileName: data.profileName,
             });
-            deleteDoc(doc(db, 'linkRequests', auth.currentUser.uid)).catch(() => { });
+            deleteDoc(doc(db, 'linkRequests', code)).catch(() => { });
             await startSyncingTarget(false);
         }
     }, () => { });
 };
 
-// Har enheten en väntande förfrågan?
-export const getPendingLinkRequest = async () => {
-    if (!auth.currentUser) return null;
+// Pågående kodvisning att återuppta efter omstart?
+export const getPendingLinkCode = async () => {
+    const code = localStorage.getItem(LINK_CODE_KEY);
+    if (!code || !auth.currentUser) return null;
     try {
-        const snap = await getDoc(doc(db, 'linkRequests', auth.currentUser.uid));
-        return snap.exists() && snap.data().status === 'pending' ? snap.data() : null;
-    } catch {
-        return null;
-    }
+        const snap = await getDoc(doc(db, 'linkRequests', code));
+        if (snap.exists() && snap.data().deviceUid === auth.currentUser.uid
+            && snap.data().status === 'pending') {
+            return code;
+        }
+    } catch { /* borttagen eller ej vår */ }
+    localStorage.removeItem(LINK_CODE_KEY);
+    return null;
 };
 
 export const cancelDeviceLink = async () => {
     if (unsubscribeLinkWatch) unsubscribeLinkWatch();
     unsubscribeLinkWatch = null;
-    if (auth.currentUser) {
-        await deleteDoc(doc(db, 'linkRequests', auth.currentUser.uid)).catch(() => { });
+    const code = localStorage.getItem(LINK_CODE_KEY);
+    localStorage.removeItem(LINK_CODE_KEY);
+    if (code) {
+        await deleteDoc(doc(db, 'linkRequests', code)).catch(() => { });
     }
 };
 
@@ -194,35 +214,26 @@ export const unlinkDevice = () => {
 
 // --- Parkoppling: förälderns sida ---
 
-export const fetchPendingLinkRequests = async () => {
+// Koppla en barnenhet till en profil med koden från barnets skärm
+export const linkDeviceByCode = async (code, profile) => {
     const { user } = useAuthStore.getState();
-    if (!user?.email) return [];
-    const snap = await getDocs(query(
-        collection(db, 'linkRequests'),
-        where('parentEmail', '==', user.email.toLowerCase())
-    ));
-    return snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(r => r.status === 'pending');
-};
-
-export const approveLinkRequest = async (request, profile) => {
-    const { user } = useAuthStore.getState();
-    if (!user) return;
-    await setDoc(doc(db, 'families', user.uid, 'grants', request.deviceUid), {
+    if (!user) throw new Error('inte inloggad');
+    const ref = doc(db, 'linkRequests', code.trim());
+    const snap = await getDoc(ref);
+    if (!snap.exists() || snap.data().status !== 'pending') {
+        throw new Error('Ingen väntande enhet med den koden. Kontrollera att koden fortfarande visas på barnets skärm.');
+    }
+    const { deviceUid } = snap.data();
+    await setDoc(doc(db, 'families', user.uid, 'grants', deviceUid), {
         profileId: profile.id,
         createdAt: serverTimestamp(),
     });
-    await updateDoc(doc(db, 'linkRequests', request.deviceUid), {
+    await updateDoc(ref, {
         status: 'approved',
         familyUid: user.uid,
         profileId: profile.id,
         profileName: profile.name,
     });
-};
-
-export const denyLinkRequest = async (request) => {
-    await deleteDoc(doc(db, 'linkRequests', request.deviceUid));
 };
 
 // --- Profiler ---
@@ -234,14 +245,16 @@ export const listProfiles = async () => {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-export const createProfile = async (name) => {
+export const createProfile = async (name, age) => {
     const { user } = useAuthStore.getState();
     if (!user) return null;
-    const ref = await addDoc(collection(db, 'families', user.uid, 'profiles'), {
+    const profileData = {
         name,
         createdAt: serverTimestamp(),
-    });
-    return { id: ref.id, name };
+    };
+    if (age) profileData.age = age;
+    const ref = await addDoc(collection(db, 'families', user.uid, 'profiles'), profileData);
+    return { id: ref.id, name, age: age || null };
 };
 
 // Hämta alla profilers framsteg — för föräldrapanelen
@@ -309,9 +322,9 @@ export const initAuth = () => {
                 // Kopplad barnenhet: återuppta synken
                 startSyncingTarget(false);
             } else {
-                // Väntande förfrågan? Fortsätt lyssna efter godkännande
-                const pending = await getPendingLinkRequest();
-                if (pending) watchDeviceLink();
+                // Pågående kodvisning? Fortsätt lyssna efter godkännande
+                const code = await getPendingLinkCode();
+                if (code) watchDeviceLink(code);
             }
             return;
         }

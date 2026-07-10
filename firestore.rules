@@ -2,17 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Parkopplingsförfrågningar från barnenheter (anonymt inloggade).
-    // Dokument-ID = enhetens uid. Föräldern (matchad via e-post) godkänner.
-    match /linkRequests/{deviceUid} {
+    // Parkoppling: barnenheten (anonymt inloggad) skapar ett dokument
+    // med en sexsiffrig kod som ID. Föräldern som känner till koden
+    // godkänner genom att stämpla sin familj på dokumentet.
+    // list är avstängt — koden är hemligheten.
+    match /linkRequests/{code} {
       allow create: if request.auth != null
-        && request.auth.uid == deviceUid
-        && request.resource.data.deviceUid == deviceUid;
-      allow read, delete: if request.auth != null
-        && (request.auth.uid == deviceUid
-            || request.auth.token.email == resource.data.parentEmail);
+        && request.resource.data.deviceUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow get: if request.auth != null;
+      allow list: if false;
       allow update: if request.auth != null
-        && request.auth.token.email == resource.data.parentEmail;
+        && request.resource.data.familyUid == request.auth.uid
+        && request.resource.data.deviceUid == resource.data.deviceUid;
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.deviceUid
+            || request.auth.uid == resource.data.familyUid);
     }
 
     match /families/{uid} {
