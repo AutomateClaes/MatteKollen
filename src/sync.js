@@ -244,22 +244,29 @@ export const createProfile = async (name) => {
     return { id: ref.id, name };
 };
 
-// Hämta alla profilers framsteg — för föräldraöversikten
+// Hämta alla profilers framsteg — för föräldrapanelen
 export const fetchFamilyOverview = async () => {
     const { user } = useAuthStore.getState();
     if (!user) return [];
     const profiles = await listProfiles();
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const overview = [];
     for (const p of profiles) {
         const snap = await getDoc(stateDocRef(user.uid, p.id));
         const s = snap.exists() ? snap.data() : null;
         const history = s?.history || [];
-        const solved = history.filter(e => e.isCorrect || e.taskData?.solvedAfterRetry);
+        // Ett svar per fråga: retry-poster är extra rader för samma fråga
+        const isAnswerEntry = (e) => !e.taskData?.solvedAfterRetry;
+        const isSolvedEntry = (e) => e.isCorrect || e.taskData?.solvedAfterRetry;
+        const weekHistory = history.filter(e => (e.timestamp || 0) > weekAgo);
         overview.push({
             ...p,
             points: s?.points ?? 0,
-            totalAnswers: history.length,
-            totalSolved: solved.length,
+            totalAnswers: history.filter(isAnswerEntry).length,
+            totalSolved: history.filter(isSolvedEntry).length,
+            weekAnswers: weekHistory.filter(isAnswerEntry).length,
+            weekSolved: weekHistory.filter(isSolvedEntry).length,
+            weekRevealed: weekHistory.filter(e => e.taskData?.revealedAnswer).length,
             revealedCount: history.filter(e => e.taskData?.revealedAnswer).length,
             lastActivity: history[0]?.timestamp || null,
         });

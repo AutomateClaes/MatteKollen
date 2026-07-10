@@ -34,6 +34,11 @@ function FamilySection() {
                 .then(setProfiles)
                 .catch(() => setError('Kunde inte hämta profiler. Kontrollera internet.'));
             fetchPendingLinkRequests().then(setLinkRequests).catch(() => { });
+            setLoadingOverview(true);
+            fetchFamilyOverview()
+                .then(setOverview)
+                .catch(() => setOverview([]))
+                .finally(() => setLoadingOverview(false));
         }
     }, [isParent]);
 
@@ -43,16 +48,33 @@ function FamilySection() {
         }
     }, [user, linkedFamily]);
 
-    const showOverview = async () => {
-        setLoadingOverview(true);
-        try {
-            setOverview(await fetchFamilyOverview());
-        } catch {
-            setOverview([]);
-        } finally {
-            setLoadingOverview(false);
-        }
-    };
+    // Föräldrapanel: veckostatus per barn (delas av båda förälderlägena)
+    const dashboardBlock = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <strong style={{ fontSize: '0.9rem', color: 'var(--color-primary)' }}>👨‍👩‍👧‍👦 Föräldrapanel</strong>
+            {loadingOverview && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar…</span>}
+            {overview && overview.length === 0 && !loadingOverview && (
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Inga barnprofiler än — skapa en nedan.</span>
+            )}
+            {(overview || []).map(p => (
+                <div key={p.id} style={{ background: 'white', borderRadius: '8px', padding: '0.6rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <strong>{p.name}</strong>
+                        <span style={{ fontSize: '0.9rem' }}>⭐ {p.points} p</span>
+                        <span style={{ flex: 1 }} />
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                            {p.lastActivity ? `senast aktiv ${new Date(p.lastActivity).toLocaleDateString('sv-SE')}` : 'ingen aktivitet än'}
+                        </span>
+                    </div>
+                    <div style={{ fontSize: '0.9rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span>Senaste 7 dagarna: <strong>{p.weekAnswers}</strong> besvarade</span>
+                        <span style={{ color: 'var(--color-success)' }}>{p.weekSolved} rätt{p.weekAnswers > 0 ? ` (${Math.round(100 * p.weekSolved / Math.max(p.weekAnswers, 1))}%)` : ''}</span>
+                        {p.weekRevealed > 0 && <span style={{ color: 'var(--color-accent)' }}>👁 {p.weekRevealed} visade svar</span>}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 
     const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' };
     const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', cursor: 'pointer' };
@@ -188,6 +210,7 @@ function FamilySection() {
                     <button style={btnStyle} onClick={logout}><LogOut size={15} /> Logga ut</button>
                 </div>
                 {requestsBlock}
+                {dashboardBlock}
                 {profiles === null && !error && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar profiler…</span>}
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     {(profiles || []).map(p => (
@@ -242,28 +265,7 @@ function FamilySection() {
                 </button>
             </div>
             {requestsBlock}
-            <div>
-                {overview === null ? (
-                    <button style={btnStyle} onClick={showOverview} disabled={loadingOverview}>
-                        {loadingOverview ? 'Hämtar…' : 'Visa familjeöversikt'}
-                    </button>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        {overview.map(p => (
-                            <div key={p.id} style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem', flexWrap: 'wrap', background: 'white', borderRadius: '8px', padding: '0.5rem 0.8rem' }}>
-                                <strong style={{ minWidth: '6rem' }}>{p.name}</strong>
-                                <span>⭐ {p.points} p</span>
-                                <span>✅ {p.totalSolved} lösta</span>
-                                <span>👁 {p.revealedCount} visade svar</span>
-                                <span style={{ color: 'var(--color-text-muted)' }}>
-                                    {p.lastActivity ? `senast ${new Date(p.lastActivity).toLocaleDateString('sv-SE')}` : 'ingen aktivitet än'}
-                                </span>
-                            </div>
-                        ))}
-                        {overview.length === 0 && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Kunde inte hämta översikten.</span>}
-                    </div>
-                )}
-            </div>
+            {dashboardBlock}
         </div>
     );
 }
