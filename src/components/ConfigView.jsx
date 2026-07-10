@@ -4,25 +4,44 @@ import { GRADE_LEVELS } from '../data/categories';
 import { Settings, Play, CheckCircle2, Circle, MinusCircle, ChevronDown, ChevronRight, Trash2, Users, LogOut, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
-import { logout, fetchFamilyOverview, stopSync, loginWithGoogle, listProfiles, createProfile, activateProfile } from '../sync';
+import {
+    logout, fetchFamilyOverview, stopSync, loginWithGoogle, listProfiles,
+    createProfile, activateProfile, requestDeviceLink, getPendingLinkRequest,
+    cancelDeviceLink, unlinkDevice, fetchPendingLinkRequests,
+    approveLinkRequest, denyLinkRequest,
+} from '../sync';
 import './ConfigView.css';
 
 function FamilySection() {
-    const { user, profile, authLoading, syncState, clearProfile } = useAuthStore();
+    const { user, profile, linkedFamily, authLoading, syncState, clearProfile } = useAuthStore();
     const [overview, setOverview] = useState(null);
     const [loadingOverview, setLoadingOverview] = useState(false);
     const [profiles, setProfiles] = useState(null);
     const [newName, setNewName] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
+    const [linkMode, setLinkMode] = useState(false);
+    const [linkEmail, setLinkEmail] = useState('');
+    const [waitingApproval, setWaitingApproval] = useState(false);
+    const [linkRequests, setLinkRequests] = useState([]);
+
+    const isParent = !!user && !user.isAnonymous;
+    const isLinkedChild = !!user?.isAnonymous && !!linkedFamily;
 
     React.useEffect(() => {
-        if (user && !profile) {
+        if (isParent) {
             listProfiles()
                 .then(setProfiles)
                 .catch(() => setError('Kunde inte hämta profiler. Kontrollera internet.'));
+            fetchPendingLinkRequests().then(setLinkRequests).catch(() => { });
         }
-    }, [user, profile]);
+    }, [isParent]);
+
+    React.useEffect(() => {
+        if (user?.isAnonymous && !linkedFamily) {
+            getPendingLinkRequest().then(p => { if (p) setWaitingApproval(true); });
+        }
+    }, [user, linkedFamily]);
 
     const showOverview = async () => {
         setLoadingOverview(true);
@@ -41,31 +60,122 @@ function FamilySection() {
 
     if (authLoading) return null;
 
-    // Inte inloggad: erbjud molnsynk
-    if (!user) {
+    // Kopplad barnenhet: visar profil och synkstatus
+    if (isLinkedChild) {
+        const syncLabel = { loading: 'synkar…', synced: 'synkad ✓', error: 'synkfel!', idle: '' }[syncState] || '';
         return (
             <div className="family-section glass" style={{ ...sectionStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
-                    Framsteg sparas bara på den här enheten. Logga in som förälder för att synka mellan enheter.
-                </span>
-                <button style={btnStyle} disabled={busy} onClick={async () => {
-                    setError(null);
-                    setBusy(true);
-                    try {
-                        await loginWithGoogle();
-                    } catch (err) {
-                        console.error(err);
-                        setError('Inloggningen misslyckades. Försök igen.');
-                    } finally {
-                        setBusy(false);
-                    }
-                }}>
-                    <Users size={15} /> Logga in med Google
-                </button>
-                {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem', width: '100%' }}>{error}</span>}
+                <Users size={18} color="var(--color-primary)" />
+                <strong>{linkedFamily.profileName}</strong>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>kopplad till förälder · {syncLabel}</span>
+                <span style={{ flex: 1 }} />
+                <button style={btnStyle} onClick={() => {
+                    if (window.confirm('Koppla från enheten? Framstegen finns kvar i molnet.')) unlinkDevice();
+                }}>Koppla från</button>
             </div>
         );
     }
+
+    // Barnenhet som väntar på förälderns godkännande
+    if (user?.isAnonymous && waitingApproval) {
+        return (
+            <div className="family-section glass" style={{ ...sectionStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
+                    ⏳ Väntar på godkännande — öppna MatteKollen på förälderns enhet, gå till inställningarna och godkänn kopplingen.
+                </span>
+                <button style={btnStyle} onClick={async () => {
+                    await cancelDeviceLink();
+                    setWaitingApproval(false);
+                }}>Avbryt</button>
+            </div>
+        );
+    }
+
+    // Inte inloggad (eller anonym utan koppling): erbjud molnsynk
+    if (!isParent) {
+        return (
+            <div className="family-section glass" style={sectionStyle}>
+                <div style={rowStyle}>
+                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
+                        Framsteg sparas bara på den här enheten. Synka genom att logga in — eller koppla barnets enhet till en förälder.
+                    </span>
+                </div>
+                <div style={rowStyle}>
+                    <button style={btnStyle} disabled={busy} onClick={async () => {
+                        setError(null);
+                        setBusy(true);
+                        try {
+                            await loginWithGoogle();
+                        } catch (err) {
+                            console.error(err);
+                            setError('Inloggningen misslyckades. Försök igen.');
+                        } finally {
+                            setBusy(false);
+                        }
+                    }}>
+                        <Users size={15} /> Logga in med Google (förälder)
+                    </button>
+                    {!linkMode && (
+                        <button style={btnStyle} onClick={() => setLinkMode(true)}>
+                            Koppla till förälders konto
+                        </button>
+                    )}
+                </div>
+                {linkMode && (
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <input
+                            type="email"
+                            placeholder="Förälderns e-postadress…"
+                            value={linkEmail}
+                            onChange={e => setLinkEmail(e.target.value)}
+                            style={{ flex: 1, minWidth: '200px', padding: '0.5rem 0.8rem', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'var(--font-body)' }}
+                        />
+                        <button style={btnStyle} disabled={busy || !linkEmail.includes('@')} onClick={async () => {
+                            setError(null);
+                            setBusy(true);
+                            try {
+                                await requestDeviceLink(linkEmail);
+                                setWaitingApproval(true);
+                            } catch (err) {
+                                console.error(err);
+                                setError('Kunde inte skicka förfrågan. Kontrollera internet.');
+                            } finally {
+                                setBusy(false);
+                            }
+                        }}>
+                            Skicka förfrågan
+                        </button>
+                    </div>
+                )}
+                {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</span>}
+            </div>
+        );
+    }
+
+    // Förälderns väntande parkopplingsförfrågningar (visas i båda förälderlägena)
+    const requestsBlock = linkRequests.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: '#FFF7E6', borderRadius: '8px', padding: '0.6rem 0.8rem', border: '1px solid #FFD591' }}>
+            {linkRequests.map(req => (
+                <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.9rem' }}>📱 En enhet vill kopplas — välj profil:</span>
+                    {(profiles || []).map(p => (
+                        <button key={p.id} style={btnStyle} onClick={async () => {
+                            try {
+                                await approveLinkRequest(req, p);
+                                setLinkRequests(rs => rs.filter(r => r.id !== req.id));
+                            } catch { setError('Kunde inte godkänna.'); }
+                        }}>
+                            ✓ {p.name}
+                        </button>
+                    ))}
+                    <button style={{ ...btnStyle, color: 'var(--color-error)' }} onClick={async () => {
+                        await denyLinkRequest(req);
+                        setLinkRequests(rs => rs.filter(r => r.id !== req.id));
+                    }}>Neka</button>
+                </div>
+            ))}
+        </div>
+    );
 
     // Inloggad men ingen profil vald för enheten: profilväljare
     if (!profile) {
@@ -77,6 +187,7 @@ function FamilySection() {
                     <span style={{ flex: 1 }} />
                     <button style={btnStyle} onClick={logout}><LogOut size={15} /> Logga ut</button>
                 </div>
+                {requestsBlock}
                 {profiles === null && !error && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar profiler…</span>}
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     {(profiles || []).map(p => (
@@ -130,6 +241,7 @@ function FamilySection() {
                     <LogOut size={15} /> Logga ut
                 </button>
             </div>
+            {requestsBlock}
             <div>
                 {overview === null ? (
                     <button style={btnStyle} onClick={showOverview} disabled={loadingOverview}>

@@ -1,9 +1,41 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Varje förälder kommer bara åt sin egen familjs data
-    match /families/{uid}/{document=**} {
+
+    // Parkopplingsförfrågningar från barnenheter (anonymt inloggade).
+    // Dokument-ID = enhetens uid. Föräldern (matchad via e-post) godkänner.
+    match /linkRequests/{deviceUid} {
+      allow create: if request.auth != null
+        && request.auth.uid == deviceUid
+        && request.resource.data.deviceUid == deviceUid;
+      allow read, delete: if request.auth != null
+        && (request.auth.uid == deviceUid
+            || request.auth.token.email == resource.data.parentEmail);
+      allow update: if request.auth != null
+        && request.auth.token.email == resource.data.parentEmail;
+    }
+
+    match /families/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Godkända enhetskopplingar: deviceUid -> profileId
+      match /grants/{deviceUid} {
+        allow read: if request.auth != null
+          && (request.auth.uid == uid || request.auth.uid == deviceUid);
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      match /profiles/{profileId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+
+        // Profilens framsteg: föräldern, eller en enhet med godkänd
+        // koppling till just denna profil
+        match /state/{stateDoc} {
+          allow read, write: if request.auth != null
+            && (request.auth.uid == uid
+                || get(/databases/$(database)/documents/families/$(uid)/grants/$(request.auth.uid)).data.profileId == profileId);
+        }
+      }
     }
   }
 }

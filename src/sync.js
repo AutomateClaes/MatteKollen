@@ -4,15 +4,20 @@
 //   families/{uid}                          — förälderns familj
 //   families/{uid}/profiles/{pid}           — barnprofil { name }
 //   families/{uid}/profiles/{pid}/state/app — profilens framsteg
-// Strategi: läs vid profilval, spara (debounce) vid varje ändring.
+//   families/{uid}/grants/{deviceUid}       — godkänd enhetskoppling
+//   linkRequests/{deviceUid}                — väntande parkoppling
+//
+// Två sätt att synka:
+//  1. Förälderns enhet: Google-inloggning + vald profil
+//  2. Barnets enhet: anonym inloggning + godkänd koppling (grant)
 // =============================================================
 import {
     onAuthStateChanged, signInWithPopup, signInWithRedirect,
-    getRedirectResult, signOut,
+    getRedirectResult, signOut, signInAnonymously,
 } from 'firebase/auth';
 import {
-    doc, getDoc, setDoc, addDoc, collection, getDocs,
-    serverTimestamp, deleteDoc,
+    doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs,
+    query, where, onSnapshot, serverTimestamp, deleteDoc,
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { useStore } from './store/useStore';
@@ -23,9 +28,22 @@ const MAX_SYNCED_HISTORY = 1500;
 let saveTimer = null;
 let applyingCloud = false;
 let unsubscribeStore = null;
+let unsubscribeLinkWatch = null;
 
-const stateDocRef = (uid, profileId) =>
-    doc(db, 'families', uid, 'profiles', profileId, 'state', 'app');
+// Vart ska denna enhet synka? Förälder med vald profil, eller kopplad barnenhet
+const getSyncTarget = () => {
+    const { user, profile, linkedFamily } = useAuthStore.getState();
+    if (user && !user.isAnonymous && profile) {
+        return { familyUid: user.uid, profileId: profile.id };
+    }
+    if (user && user.isAnonymous && linkedFamily) {
+        return { familyUid: linkedFamily.familyUid, profileId: linkedFamily.profileId };
+    }
+    return null;
+};
+
+const stateDocRef = (familyUid, profileId) =>
+    doc(db, 'families', familyUid, 'profiles', profileId, 'state', 'app');
 
 const pickSyncedState = () => {
     const s = useStore.getState();
@@ -39,10 +57,10 @@ const pickSyncedState = () => {
 };
 
 const saveNow = async () => {
-    const { user, profile } = useAuthStore.getState();
-    if (!user || !profile) return;
+    const target = getSyncTarget();
+    if (!target) return;
     try {
-        await setDoc(stateDocRef(user.uid, profile.id), pickSyncedState());
+        await setDoc(stateDocRef(target.familyUid, target.profileId), pickSyncedState());
         useAuthStore.getState().setSyncState('synced');
     } catch (err) {
         console.error('Synk misslyckades', err);
@@ -69,15 +87,15 @@ const startWatchingStore = () => {
     });
 };
 
-// Ladda vald profils framsteg från molnet (eller migrera upp lokalt state
-// om profilen är ny) och börja synka
-export const activateProfile = async (profile) => {
-    const { user } = useAuthStore.getState();
-    if (!user) return;
+// Ladda målets framsteg från molnet och börja synka.
+// migrateLocalIfEmpty: om molnet saknar data blir enhetens lokala
+// framsteg startläget (används när föräldern skapar en ny profil)
+const startSyncingTarget = async (migrateLocalIfEmpty) => {
+    const target = getSyncTarget();
+    if (!target) return;
     useAuthStore.getState().setSyncState('loading');
-    useAuthStore.getState().selectProfile(profile);
     try {
-        const snap = await getDoc(stateDocRef(user.uid, profile.id));
+        const snap = await getDoc(stateDocRef(target.familyUid, target.profileId));
         if (snap.exists()) {
             const cloud = snap.data();
             applyingCloud = true;
@@ -89,9 +107,10 @@ export const activateProfile = async (profile) => {
             });
             applyingCloud = false;
             useAuthStore.getState().setSyncState('synced');
-        } else {
-            // Ny profil: nuvarande lokala framsteg blir profilens startläge
+        } else if (migrateLocalIfEmpty) {
             await saveNow();
+        } else {
+            useAuthStore.getState().setSyncState('synced');
         }
         startWatchingStore();
     } catch (err) {
@@ -100,10 +119,110 @@ export const activateProfile = async (profile) => {
     }
 };
 
+// Förälderns enhet: aktivera vald profil
+export const activateProfile = async (profile) => {
+    useAuthStore.getState().selectProfile(profile);
+    await startSyncingTarget(true);
+};
+
 export const stopSync = () => {
     if (unsubscribeStore) unsubscribeStore();
     unsubscribeStore = null;
     clearTimeout(saveTimer);
+};
+
+// --- Parkoppling: barnets enhet ---
+
+// Skicka förfrågan till förälderns e-post och vänta på godkännande
+export const requestDeviceLink = async (parentEmail) => {
+    if (!auth.currentUser) {
+        await signInAnonymously(auth);
+    }
+    const deviceUid = auth.currentUser.uid;
+    await setDoc(doc(db, 'linkRequests', deviceUid), {
+        deviceUid,
+        parentEmail: parentEmail.trim().toLowerCase(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+    });
+    watchDeviceLink();
+};
+
+// Lyssna på svaret — när föräldern godkänt aktiveras synken automatiskt
+export const watchDeviceLink = () => {
+    if (!auth.currentUser) return;
+    if (unsubscribeLinkWatch) unsubscribeLinkWatch();
+    unsubscribeLinkWatch = onSnapshot(doc(db, 'linkRequests', auth.currentUser.uid), async (snap) => {
+        const data = snap.data();
+        if (data?.status === 'approved') {
+            unsubscribeLinkWatch();
+            unsubscribeLinkWatch = null;
+            useAuthStore.getState().setLinkedFamily({
+                familyUid: data.familyUid,
+                profileId: data.profileId,
+                profileName: data.profileName,
+            });
+            deleteDoc(doc(db, 'linkRequests', auth.currentUser.uid)).catch(() => { });
+            await startSyncingTarget(false);
+        }
+    }, () => { });
+};
+
+// Har enheten en väntande förfrågan?
+export const getPendingLinkRequest = async () => {
+    if (!auth.currentUser) return null;
+    try {
+        const snap = await getDoc(doc(db, 'linkRequests', auth.currentUser.uid));
+        return snap.exists() && snap.data().status === 'pending' ? snap.data() : null;
+    } catch {
+        return null;
+    }
+};
+
+export const cancelDeviceLink = async () => {
+    if (unsubscribeLinkWatch) unsubscribeLinkWatch();
+    unsubscribeLinkWatch = null;
+    if (auth.currentUser) {
+        await deleteDoc(doc(db, 'linkRequests', auth.currentUser.uid)).catch(() => { });
+    }
+};
+
+export const unlinkDevice = () => {
+    stopSync();
+    useAuthStore.getState().clearLinkedFamily();
+};
+
+// --- Parkoppling: förälderns sida ---
+
+export const fetchPendingLinkRequests = async () => {
+    const { user } = useAuthStore.getState();
+    if (!user?.email) return [];
+    const snap = await getDocs(query(
+        collection(db, 'linkRequests'),
+        where('parentEmail', '==', user.email.toLowerCase())
+    ));
+    return snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => r.status === 'pending');
+};
+
+export const approveLinkRequest = async (request, profile) => {
+    const { user } = useAuthStore.getState();
+    if (!user) return;
+    await setDoc(doc(db, 'families', user.uid, 'grants', request.deviceUid), {
+        profileId: profile.id,
+        createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'linkRequests', request.deviceUid), {
+        status: 'approved',
+        familyUid: user.uid,
+        profileId: profile.id,
+        profileName: profile.name,
+    });
+};
+
+export const denyLinkRequest = async (request) => {
+    await deleteDoc(doc(db, 'linkRequests', request.deviceUid));
 };
 
 // --- Profiler ---
@@ -123,13 +242,6 @@ export const createProfile = async (name) => {
         createdAt: serverTimestamp(),
     });
     return { id: ref.id, name };
-};
-
-export const deleteProfile = async (profileId) => {
-    const { user } = useAuthStore.getState();
-    if (!user) return;
-    await deleteDoc(stateDocRef(user.uid, profileId));
-    await deleteDoc(doc(db, 'families', user.uid, 'profiles', profileId));
 };
 
 // Hämta alla profilers framsteg — för föräldraöversikten
@@ -182,15 +294,27 @@ export const initAuth = () => {
     getRedirectResult(auth).catch(() => { });
     onAuthStateChanged(auth, async (user) => {
         useAuthStore.getState().setUser(user);
-        if (user) {
-            // Se till att familjedokumentet finns
-            setDoc(doc(db, 'families', user.uid), {
-                email: user.email,
-                createdAt: serverTimestamp(),
-            }, { merge: true }).catch(() => { });
-            // Återuppta synk om enheten redan har en vald profil
-            const { profile } = useAuthStore.getState();
-            if (profile) activateProfile(profile);
+        if (!user) return;
+
+        if (user.isAnonymous) {
+            const { linkedFamily } = useAuthStore.getState();
+            if (linkedFamily) {
+                // Kopplad barnenhet: återuppta synken
+                startSyncingTarget(false);
+            } else {
+                // Väntande förfrågan? Fortsätt lyssna efter godkännande
+                const pending = await getPendingLinkRequest();
+                if (pending) watchDeviceLink();
+            }
+            return;
         }
+
+        // Förälder: se till att familjedokumentet finns
+        setDoc(doc(db, 'families', user.uid), {
+            email: user.email,
+            createdAt: serverTimestamp(),
+        }, { merge: true }).catch(() => { });
+        const { profile } = useAuthStore.getState();
+        if (profile) startSyncingTarget(true);
     });
 };
