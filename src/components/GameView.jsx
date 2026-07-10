@@ -512,8 +512,8 @@ export default function GameView({ onBack }) {
                                 </>
                             )}
 
-                            {/* För Svårt Button */}
-                            {!isAnswered && (
+                            {/* För Svårt Button — inte för stavning/glosor, där finns Visa svar */}
+                            {!isAnswered && currentTask.type !== 'spelling' && (
                                 <motion.button
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
