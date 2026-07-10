@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ConfigView from './components/ConfigView';
 import GameView from './components/GameView';
-import StartFlow from './components/StartFlow';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useAuthStore } from './store/useAuthStore';
 import { initAuth } from './sync';
 
 class ErrorBoundary extends React.Component {
@@ -27,25 +25,12 @@ class ErrorBoundary extends React.Component {
 }
 
 function App() {
-  // Starta direkt i spelet — inställningarna nås via tillbaka-pilen
+  // Starta direkt i spelet — inloggning och synk sköts i inställningarna
   const [isPlaying, setIsPlaying] = useState(true);
-  const { user, authLoading, profile, localMode } = useAuthStore();
 
   useEffect(() => {
     initAuth();
   }, []);
-
-  // Enheten är redo när den spelar lokalt, eller är inloggad med vald profil
-  const deviceReady = localMode || (user && profile);
-
-  if (!deviceReady && !authLoading && !localMode) {
-    return <StartFlow />;
-  }
-
-  if (authLoading && !localMode && !profile) {
-    // Kort laddskärm medan Firebase återupptar inloggningen
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#845EC2', fontFamily: 'var(--font-heading)' }}>MatteKollen…</div>;
-  }
 
   return (
     <div className="app-container">

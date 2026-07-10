@@ -4,13 +4,25 @@ import { GRADE_LEVELS } from '../data/categories';
 import { Settings, Play, CheckCircle2, Circle, MinusCircle, ChevronDown, ChevronRight, Trash2, Users, LogOut, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
-import { logout, fetchFamilyOverview, stopSync } from '../sync';
+import { logout, fetchFamilyOverview, stopSync, loginWithGoogle, listProfiles, createProfile, activateProfile } from '../sync';
 import './ConfigView.css';
 
 function FamilySection() {
-    const { user, profile, localMode, syncState, clearProfile, exitLocalMode } = useAuthStore();
+    const { user, profile, authLoading, syncState, clearProfile } = useAuthStore();
     const [overview, setOverview] = useState(null);
     const [loadingOverview, setLoadingOverview] = useState(false);
+    const [profiles, setProfiles] = useState(null);
+    const [newName, setNewName] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+
+    React.useEffect(() => {
+        if (user && !profile) {
+            listProfiles()
+                .then(setProfiles)
+                .catch(() => setError('Kunde inte hämta profiler. Kontrollera internet.'));
+        }
+    }, [user, profile]);
 
     const showOverview = async () => {
         setLoadingOverview(true);
@@ -24,18 +36,83 @@ function FamilySection() {
     };
 
     const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' };
-    const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)' };
+    const btnStyle = { display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid var(--color-border)', padding: '0.5rem 0.9rem', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', cursor: 'pointer' };
+    const sectionStyle = { background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' };
 
-    if (localMode) {
+    if (authLoading) return null;
+
+    // Inte inloggad: erbjud molnsynk
+    if (!user) {
         return (
-            <div className="family-section glass" style={{ ...rowStyle, background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Spelar utan konto — framsteg sparas bara på den här enheten.</span>
-                <button style={btnStyle} onClick={exitLocalMode}>Logga in och synka</button>
+            <div className="family-section glass" style={{ ...sectionStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', flex: 1, minWidth: '200px' }}>
+                    Framsteg sparas bara på den här enheten. Logga in som förälder för att synka mellan enheter.
+                </span>
+                <button style={btnStyle} disabled={busy} onClick={async () => {
+                    setError(null);
+                    setBusy(true);
+                    try {
+                        await loginWithGoogle();
+                    } catch (err) {
+                        console.error(err);
+                        setError('Inloggningen misslyckades. Försök igen.');
+                    } finally {
+                        setBusy(false);
+                    }
+                }}>
+                    <Users size={15} /> Logga in med Google
+                </button>
+                {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem', width: '100%' }}>{error}</span>}
             </div>
         );
     }
 
-    if (!user || !profile) return null;
+    // Inloggad men ingen profil vald för enheten: profilväljare
+    if (!profile) {
+        return (
+            <div className="family-section glass" style={sectionStyle}>
+                <div style={rowStyle}>
+                    <Users size={18} color="var(--color-primary)" />
+                    <strong>Vem övar på den här enheten?</strong>
+                    <span style={{ flex: 1 }} />
+                    <button style={btnStyle} onClick={logout}><LogOut size={15} /> Logga ut</button>
+                </div>
+                {profiles === null && !error && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>Hämtar profiler…</span>}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {(profiles || []).map(p => (
+                        <button key={p.id} style={btnStyle} disabled={busy} onClick={async () => {
+                            setBusy(true);
+                            try { await activateProfile({ id: p.id, name: p.name }); }
+                            catch { setError('Kunde inte ladda profilen.'); setBusy(false); }
+                        }}>
+                            {p.name}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                        type="text"
+                        placeholder="Nytt barns namn…"
+                        value={newName}
+                        maxLength={30}
+                        onChange={e => setNewName(e.target.value)}
+                        style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'var(--font-body)' }}
+                    />
+                    <button style={btnStyle} disabled={busy || !newName.trim()} onClick={async () => {
+                        setBusy(true);
+                        try {
+                            const p = await createProfile(newName.trim());
+                            await activateProfile(p);
+                        } catch { setError('Kunde inte skapa profilen.'); setBusy(false); }
+                    }}>
+                        Skapa profil
+                    </button>
+                </div>
+                {error && <span style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</span>}
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Enhetens nuvarande framsteg blir profilens startläge om profilen är ny. Inloggad som {user.email}</span>
+            </div>
+        );
+    }
 
     const syncLabel = { loading: 'synkar…', synced: 'synkad ✓', error: 'synkfel!', idle: '' }[syncState] || '';
 
