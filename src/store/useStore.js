@@ -15,6 +15,8 @@ export const useStore = create(
             seenTasks: [],
             masteryThreshold: 5,
             points: 0,
+            // Tidpunkt för senaste nollställning — synken slänger äldre poster
+            resetAt: 0,
 
             // Actions
             toggleTask: (taskId) => set((state) => {
@@ -101,6 +103,7 @@ export const useStore = create(
                 activeTasks: getAllTaskIds(),
                 seenTasks: [],
                 masteryThreshold: 5,
+                resetAt: Date.now(),
             })),
 
             addSeenTask: (equation) => set((state) => ({

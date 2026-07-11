@@ -12,7 +12,15 @@ import {
 import './ConfigView.css';
 
 function FamilySection() {
-    const { user, profile, linkedFamily, authLoading, syncState, clearProfile } = useAuthStore();
+    const { user, profile, linkedFamily, authLoading, syncState, lastSync, clearProfile } = useAuthStore();
+
+    const syncTime = Math.max(lastSync?.from || 0, lastSync?.to || 0);
+    const syncLabelText = {
+        loading: 'synkar…',
+        synced: `synkad ✓${syncTime ? ' ' + new Date(syncTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) : ''}`,
+        error: 'synkfel!',
+        idle: '',
+    }[syncState] || '';
     const [overview, setOverview] = useState(null);
     const [loadingOverview, setLoadingOverview] = useState(false);
     const [profiles, setProfiles] = useState(null);
@@ -163,12 +171,11 @@ function FamilySection() {
 
     // Kopplad barnenhet: visar profil och synkstatus
     if (isLinkedChild) {
-        const syncLabel = { loading: 'synkar…', synced: 'synkad ✓', error: 'synkfel!', idle: '' }[syncState] || '';
         return (
             <div className="family-section glass" style={{ ...sectionStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
                 <Users size={18} color="var(--color-primary)" />
                 <strong>{linkedFamily.profileName}</strong>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>kopplad till förälder · {syncLabel}</span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>kopplad till förälder · {syncLabelText}</span>
                 <span style={{ flex: 1 }} />
                 <button style={btnStyle} onClick={() => {
                     if (window.confirm('Koppla från enheten? Framstegen finns kvar i molnet.')) unlinkDevice();
@@ -273,14 +280,13 @@ function FamilySection() {
         );
     }
 
-    const syncLabel = { loading: 'synkar…', synced: 'synkad ✓', error: 'synkfel!', idle: '' }[syncState] || '';
 
     return (
         <div className="family-section glass" style={{ background: 'rgba(255,255,255,0.6)', padding: '0.7rem 1rem', borderRadius: '12px', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
             <div style={rowStyle}>
                 <Users size={18} color="var(--color-primary)" />
                 <strong>{profile.name}</strong>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{syncLabel}</span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{syncLabelText}</span>
                 <span style={{ flex: 1 }} />
                 <button style={btnStyle} onClick={() => { stopSync(); clearProfile(); }}>
                     <RefreshCw size={15} /> Byt profil

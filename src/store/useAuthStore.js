@@ -4,6 +4,7 @@ import { create } from 'zustand';
 // localStorage så att barnet slipper välja om vid varje start.
 const PROFILE_KEY = 'mk-selected-profile';
 const LINKED_KEY = 'mk-linked-family';
+const LAST_SYNC_KEY = 'mk-last-sync';
 
 const readJson = (key) => {
     try {
@@ -21,9 +22,17 @@ export const useAuthStore = create((set) => ({
     // { familyUid, profileId, profileName } — barnenhet kopplad via förfrågan
     linkedFamily: readJson(LINKED_KEY),
     syncState: 'idle', // idle | loading | synced | error
+    // { from, to } — när enheten senast hämtade respektive skickade data
+    lastSync: readJson(LAST_SYNC_KEY) || { from: null, to: null },
 
     setUser: (user) => set({ user, authLoading: false }),
     setSyncState: (syncState) => set({ syncState }),
+
+    markSync: (direction) => set((state) => {
+        const lastSync = { ...state.lastSync, [direction]: Date.now() };
+        localStorage.setItem(LAST_SYNC_KEY, JSON.stringify(lastSync));
+        return { lastSync };
+    }),
 
     selectProfile: (profile) => {
         localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));

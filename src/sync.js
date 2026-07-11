@@ -29,6 +29,69 @@ let saveTimer = null;
 let applyingCloud = false;
 let unsubscribeStore = null;
 let unsubscribeLinkWatch = null;
+let unsubscribeStateWatch = null;
+
+// Sammanfoga historiker: postens id (tidsstämpel) är huvudnyckel —
+// finns den redan görs inget, annars läggs den till. Poster äldre än
+// senaste nollställningen slängs.
+export const mergeHistories = (localHistory, cloudHistory, resetAt) => {
+    const seen = new Set();
+    const merged = [];
+    for (const entry of [...(localHistory || []), ...(cloudHistory || [])]) {
+        if (!entry || !entry.id || seen.has(entry.id)) continue;
+        if (resetAt && (entry.timestamp || 0) < resetAt) continue;
+        seen.add(entry.id);
+        merged.push(entry);
+    }
+    merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    return merged;
+};
+
+// Väv in molnets tillstånd i det lokala. Returnerar vad som hände så
+// att anroparen vet om något ändrades och om lokala poster saknas i molnet.
+const applyCloudState = (cloud) => {
+    const local = useStore.getState();
+    const localResetAt = local.resetAt || 0;
+    const cloudResetAt = cloud.resetAt || 0;
+    const resetAt = Math.max(localResetAt, cloudResetAt);
+
+    const history = mergeHistories(local.history, cloud.history, resetAt);
+
+    // Poäng: den färskaste nollställningen gäller; inom samma epok
+    // vinner det högsta värdet (poäng kan bara öka)
+    let points;
+    if (cloudResetAt > localResetAt) points = Number.isFinite(cloud.points) ? cloud.points : 0;
+    else if (localResetAt > cloudResetAt) points = Number.isFinite(local.points) ? local.points : 0;
+    else points = Math.max(
+        Number.isFinite(local.points) ? local.points : 0,
+        Number.isFinite(cloud.points) ? cloud.points : 0
+    );
+
+    const next = {
+        history,
+        points,
+        resetAt,
+        activeTasks: cloud.activeTasks || local.activeTasks,
+        masteryThreshold: cloud.masteryThreshold || local.masteryThreshold,
+    };
+
+    const cloudLen = (cloud.history || []).filter(e => !resetAt || (e.timestamp || 0) >= resetAt).length;
+    const localHasExtra = history.length > cloudLen;
+
+    const changed = history.length !== local.history.length
+        || history[0]?.id !== local.history[0]?.id
+        || points !== local.points
+        || resetAt !== localResetAt
+        || next.masteryThreshold !== local.masteryThreshold
+        || JSON.stringify(next.activeTasks) !== JSON.stringify(local.activeTasks);
+
+    if (changed) {
+        applyingCloud = true;
+        useStore.setState(next);
+        applyingCloud = false;
+    }
+    return { changed, localHasExtra };
+};
 
 // Vart ska denna enhet synka? Förälder med vald profil, eller kopplad barnenhet
 const getSyncTarget = () => {
@@ -52,6 +115,7 @@ const pickSyncedState = () => {
         history: s.history.slice(0, MAX_SYNCED_HISTORY),
         points: Number.isFinite(s.points) ? s.points : 0,
         masteryThreshold: s.masteryThreshold,
+        resetAt: s.resetAt || 0,
         updatedAt: serverTimestamp(),
     };
 };
@@ -61,6 +125,7 @@ const saveNow = async () => {
     if (!target) return;
     try {
         await setDoc(stateDocRef(target.familyUid, target.profileId), pickSyncedState());
+        useAuthStore.getState().markSync('to');
         useAuthStore.getState().setSyncState('synced');
     } catch (err) {
         console.error('Synk misslyckades', err);
@@ -87,36 +152,46 @@ const startWatchingStore = () => {
     });
 };
 
-// Ladda målets framsteg från molnet och börja synka.
-// migrateLocalIfEmpty: om molnet saknar data blir enhetens lokala
-// framsteg startläget (används när föräldern skapar en ny profil)
+// Börja synka mot målet: live-lyssning på molnets dokument. Varje
+// ändring (från vilken enhet som helst) vävs in lokalt via merge, och
+// om enheten har poster som molnet saknar skjuts de upp direkt.
 const startSyncingTarget = async (migrateLocalIfEmpty) => {
     const target = getSyncTarget();
     if (!target) return;
     useAuthStore.getState().setSyncState('loading');
-    try {
-        const snap = await getDoc(stateDocRef(target.familyUid, target.profileId));
-        if (snap.exists()) {
-            const cloud = snap.data();
-            applyingCloud = true;
-            useStore.setState({
-                activeTasks: cloud.activeTasks || [],
-                history: cloud.history || [],
-                points: Number.isFinite(cloud.points) ? cloud.points : 0,
-                masteryThreshold: cloud.masteryThreshold || 5,
-            });
-            applyingCloud = false;
-            useAuthStore.getState().setSyncState('synced');
-        } else if (migrateLocalIfEmpty) {
-            await saveNow();
-        } else {
-            useAuthStore.getState().setSyncState('synced');
+    if (unsubscribeStateWatch) unsubscribeStateWatch();
+    let firstSnapshot = true;
+    unsubscribeStateWatch = onSnapshot(
+        stateDocRef(target.familyUid, target.profileId),
+        (snap) => {
+            // Egna ännu-ej-bekräftade skrivningar behöver inte vävas in
+            if (snap.metadata.hasPendingWrites) return;
+            const authState = useAuthStore.getState();
+            if (!snap.exists()) {
+                if (firstSnapshot && migrateLocalIfEmpty) {
+                    saveNow();
+                } else {
+                    authState.setSyncState('synced');
+                }
+                firstSnapshot = false;
+                return;
+            }
+            const { localHasExtra } = applyCloudState(snap.data());
+            authState.markSync('from');
+            authState.setSyncState('synced');
+            if (localHasExtra) {
+                // Enheten har spel som molnet saknar (t.ex. offline-övning
+                // som aldrig hann skickas) — skjut upp direkt
+                scheduleSave();
+            }
+            firstSnapshot = false;
+        },
+        (err) => {
+            console.error('Kunde inte lyssna på profilen', err);
+            useAuthStore.getState().setSyncState('error');
         }
-        startWatchingStore();
-    } catch (err) {
-        console.error('Kunde inte ladda profil', err);
-        useAuthStore.getState().setSyncState('error');
-    }
+    );
+    startWatchingStore();
 };
 
 // Förälderns enhet: aktivera vald profil
@@ -128,6 +203,8 @@ export const activateProfile = async (profile) => {
 export const stopSync = () => {
     if (unsubscribeStore) unsubscribeStore();
     unsubscribeStore = null;
+    if (unsubscribeStateWatch) unsubscribeStateWatch();
+    unsubscribeStateWatch = null;
     clearTimeout(saveTimer);
 };
 
